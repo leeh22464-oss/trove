@@ -1,0 +1,8 @@
+node_modules/
+data/
+.env
+_artifacts/
+*.log
+.DS_Store
+scripts/_*
+test/

@@ -1,0 +1,23 @@
+{
+  "name": "catch",
+  "version": "0.1.0",
+  "description": "本地优先的 Prompt / Skill 收集整理工具",
+  "type": "module",
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/server.js",
+    "dev": "node --watch --disable-warning=ExperimentalWarning src/server.js",
+    "test": "node --test --disable-warning=ExperimentalWarning test/*.test.js"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@fastify/multipart": "^10.1.8",
+    "@fastify/static": "^10.1.10",
+    "@mozilla/readability": "^0.6.0",
+    "fastify": "^5.12.8",
+    "linkedom": "^0.18.15",
+    "sharp": "^0.35.5"
+  }
+}

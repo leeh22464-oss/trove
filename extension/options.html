@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Catch 扩展设置</title>
+<style>
+  * { box-sizing: border-box; margin: 0; font-family: -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei UI",sans-serif; }
+  body { max-width: 480px; margin: 32px auto; padding: 0 20px; color: #1a1a19; }
+  h1 { font-size: 18px; margin-bottom: 6px; }
+  p.sub { font-size: 13px; color: #81837c; margin-bottom: 20px; }
+  label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
+  input { width: 100%; padding: 9px 12px; border: 1px solid #e6e6e5; border-radius: 8px; font: inherit; font-size: 13px; outline: none; }
+  input:focus { border-color: #4d4f4a; }
+  .hint { font-size: 12px; color: #9a9c96; margin-top: 4px; }
+  .row { display: flex; gap: 8px; margin-top: 20px; }
+  button { padding: 9px 18px; border: 0; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; background: #f5f5f4; }
+  button.pri { background: #90e203; }
+  #stat { font-size: 13px; margin-top: 14px; }
+  #stat.ok { color: #1d724a; } #stat.err { color: #7b2214; }
+  code { background: #f5f5f4; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+</style>
+</head>
+<body>
+  <h1>Catch 扩展设置</h1>
+  <p class="sub">配置本地 Catch 服务地址和抓取 token。token 在 Catch 网页 → 设置页 复制。</p>
+  <label>服务地址</label>
+  <input id="server" placeholder="http://127.0.0.1:5173">
+  <div class="hint">默认 http://127.0.0.1:5173（Catch 服务运行的地址）</div>
+  <label>抓取 Token</label>
+  <input id="token" placeholder="ct_..." type="password">
+  <div class="hint">在 Catch 网页「设置」里复制 <code>capture_token</code></div>
+  <div class="row">
+    <button id="save" class="pri">保存</button>
+    <button id="test">测试连接</button>
+  </div>
+  <div id="stat"></div>
+  <script src="options.js"></script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "Catch 收集",
+  "version": "0.1.0",
+  "description": "一键把网页、选区、截图保存到本地 Catch 收集库",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "保存到 Catch"
+  },
+  "options_page": "options.html",
+  "background": { "service_worker": "background.js" },
+  "permissions": ["contextMenus", "storage", "activeTab", "scripting", "notifications"],
+  "host_permissions": ["http://127.0.0.1/*", "http://localhost/*", "<all_urls>"],
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "commands": {
+    "save-page": {
+      "suggested_key": { "default": "Alt+Shift+S" },
+      "description": "保存当前页到 Catch"
+    },
+    "save-selection": {
+      "suggested_key": { "default": "Alt+Shift+A" },
+      "description": "保存选中内容到 Catch"
+    }
+  }
+}

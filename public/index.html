@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-CN" class="wa-light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Catch</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23161615'/%3E%3Cpath d='M21.7 11.2A7.4 7.4 0 1 0 21.7 20.8' fill='none' stroke='%23fafafa' stroke-width='2.8' stroke-linecap='round'/%3E%3Ccircle cx='22.6' cy='16' r='2.3' fill='%2390e203'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/vendor/webawesome/styles/webawesome.css">
+  <link rel="stylesheet" href="/css/tokens.css?v=20261112">
+  <link rel="stylesheet" href="/css/app.css?v=20261112">
+  <script>
+    (() => {
+      const saved = localStorage.getItem('catch.theme');
+      const dark = saved ? saved === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.className = dark ? 'wa-dark' : 'wa-light';
+      const w = parseInt(localStorage.getItem('catch.listW'));
+      if (w) document.documentElement.style.setProperty('--list-w', w + 'px');
+    })();
+  </script>
+  <script type="module" data-webawesome="/vendor/webawesome" src="/vendor/webawesome/webawesome.loader.js"></script>
+  <script type="module" src="/js/app.js?v=20261112"></script>
+</head>
+<body>
+  <a class="skip" href="#list">跳到列表</a>
+
+  <div class="app" id="app" data-view="list">
+    <nav class="nav" id="nav" aria-label="主导航">
+      <div class="brand">
+        <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
+          <defs>
+            <linearGradient id="lgBody" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b3c39"/><stop offset="1" stop-color="#0f100f"/></linearGradient>
+            <radialGradient id="lgDot" cx=".4" cy=".35" r=".7"><stop offset="0" stop-color="#d4ff7a"/><stop offset="1" stop-color="#90e203"/></radialGradient>
+          </defs>
+          <rect x="0" y="0" width="32" height="32" rx="9" fill="url(#lgBody)"/>
+          <rect x=".5" y=".5" width="31" height="31" rx="8.5" fill="none" stroke="#ffffff" stroke-opacity=".16"/>
+          <path d="M21.7 11.2A7.4 7.4 0 1 0 21.7 20.8" fill="none" stroke="#fafafa" stroke-width="2.8" stroke-linecap="round"/>
+          <circle cx="22.6" cy="16" r="2.3" fill="url(#lgDot)"/>
+        </svg>
+        <span class="wordmark">catch</span>
+      </div>
+      <div class="nav-scroll" id="navTree"></div>
+      <div class="nav-foot">
+        <button class="nav-item" id="btnPalette" type="button"><svg class="ico" aria-hidden="true"><use href="/img/icons.svg#i-search"/></svg><span>搜索与命令</span><kbd id="palKey">Ctrl K</kbd></button>
+        <button class="nav-item" id="btnTheme" type="button"><svg class="ico" aria-hidden="true"><use href="/img/icons.svg#i-moon"/></svg><span>切换主题</span></button>
+      </div>
+    </nav>
+
+    <section class="list" id="list" aria-label="条目列表" tabindex="-1">
+      <div class="list-top">
+        <header class="list-head">
+          <button class="icon-btn only-narrow" id="btnMenu" type="button" aria-label="打开导航"><svg class="ico" aria-hidden="true"><use href="/img/icons.svg#i-menu"/></svg></button>
+          <label class="search">
+            <svg class="ico" aria-hidden="true"><use href="/img/icons.svg#i-search"/></svg>
+            <input id="q" type="search" placeholder="搜索，支持 tag:  kind:  -排除" aria-label="搜索" autocomplete="off">
+            <kbd class="kbd" aria-hidden="true">/</kbd>
+          </label>
+        </header>
+        <div class="filters seg" id="filters" role="group" aria-label="类型筛选"></div>
+      </div>
+      <div class="list-meta" id="listMeta" aria-live="polite"></div>
+      <ul class="cards" id="cards"></ul>
+      <div class="empty" id="listEmpty" hidden></div>
+    </section>
+
+    <div class="resizer" id="resizer" role="separator" aria-orientation="vertical" aria-label="调整列表宽度（可拖动，双击还原）" tabindex="0"></div>
+
+    <main class="detail" id="detail" aria-label="详情"></main>
+
+    <section class="colview" id="colview" aria-label="集合" hidden></section>
+
+    <div class="capture-bar" id="captureBar">
+      <svg class="ico" aria-hidden="true"><use href="/img/icons.svg#i-clipboard"/></svg>
+      <textarea id="capText" rows="1" placeholder="粘贴文本、链接，或直接 Ctrl+V 贴截图" aria-label="快速抓取"></textarea>
+      <button class="icon-btn" id="capFile" type="button" aria-label="选择图片"><svg class="ico" aria-hidden="true"><use href="/img/icons.svg#i-image"/></svg></button>
+      <input id="capFileInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>
+      <button class="btn primary" id="capSave" type="button">保存</button>
+      <div class="cap-thumbs" id="capThumbs"></div>
+      <div class="cap-imgs-mode" id="capImgsMode" hidden>
+        <span class="seg-mini" role="group" aria-label="多图方式">
+          <button type="button" data-mode="merge" class="on">合并为一条</button><button type="button" data-mode="split">每张分开</button>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+  <div class="scrim" id="scrim" hidden></div>
+  <dialog class="dlg" id="dlg"></dialog>
+</body>
+</html>

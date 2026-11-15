@@ -1,0 +1,228 @@
+/* 设计 token：按《UI 设计规范手册》生成，版式参考苹果 HIG 与《24 个高级 UI 交互》。
+   主色 H82 S97 L45（#90e203）；灰阶采用手册「方案 B：低色彩倾向」，饱和度压到 3，肉眼接近中性灰；间距 4px 基数。
+   绿色只用于：主按钮、状态圆点、数字角标、进度条、焦点环、logo 点缀。
+   大面积底色、选中态、标签一律用中性灰，避免整页发绿。
+   Web Awesome 的间距本身就是 4px 倍数，这里只覆盖颜色、圆角、字号、投影。 */
+
+:root {
+  /* 主色阶（保留手册 8-12 级色阶，仅点缀用） */
+  --green-15: #304b01;
+  --green-25: #507e02;
+  --green-35: #70b003;
+  --green-45: #90e203;
+  --green-55: #aafc1d;
+  --green-65: #bdfc4f;
+  --green-75: #d0fd81;
+  --green-85: #e3feb4;
+  --green-95: #f6ffe6;
+
+  /* 中性灰阶（H82 S3，对应手册灰/900…灰/50） */
+  --n-6: #0f100f;  --n-10: #1a1a19; --n-14: #242523; --n-18: #2e2f2d; --n-22: #393a36;
+  --n-30: #4d4f4a; --n-40: #676963; --n-50: #81837c; --n-60: #9a9c96; --n-70: #b3b5b0;
+  --n-80: #ccceca; --n-90: #e6e6e5; --n-94: #f0f0ef; --n-96: #f5f5f4; --n-98: #fafafa;
+
+  /* 反馈色：成功色与主色拉开色相（青绿） */
+  --ok-28: #1d724a;  --ok-52: #3bce89;  --ok-62: #64d8a2;  --ok-95: #ebfaf3;
+  --err-28: #7b2214; --err-52: #dd442c; --err-62: #e46b58; --err-95: #fbece9;
+  --warn-28: #895506; --warn-52: #f59b14; --warn-62: #f7b045; --warn-95: #fef5e7;
+
+  /* 间距 */
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px;
+  --s-6: 24px; --s-8: 32px; --s-10: 40px; --s-16: 64px;
+
+  /* 字号 */
+  --fs-xs: 12px; --fs-s: 14px; --fs-m: 15px; --fs-l: 20px; --fs-xl: 26px;
+
+  /* 圆角 */
+  --r-s: 8px; --r-m: 10px; --r-l: 14px; --r-xl: 20px; --r-pill: 999px;
+
+  /* 三栏宽度 */
+  --nav-w: 248px;
+  --list-w: 380px;
+
+  /* 动效 */
+  --ease: cubic-bezier(.32, .72, 0, 1);
+  --spring: cubic-bezier(.34, 1.56, .64, 1);
+}
+
+/* ---------- 浅色（默认）语义角色 ---------- */
+:root,
+.wa-light {
+  --c-bg: var(--n-96);
+  --c-surface: #ffffff;
+  --c-raised: #ffffff;
+  --c-sunken: var(--n-94);
+
+  /* 磨砂玻璃：半透明底 + 模糊 + 高光描边 */
+  --glass-bg: color-mix(in oklab, #ffffff 62%, transparent);
+  --glass-bg-strong: color-mix(in oklab, #ffffff 78%, transparent);
+  --glass-line: color-mix(in oklab, #ffffff 70%, transparent);
+  --glass-shadow: 0 1px 0 rgba(255, 255, 255, .5) inset, 0 2px 8px rgba(20, 20, 18, .03);
+  --blur: saturate(190%) blur(22px);
+
+  --c-fill: color-mix(in oklab, var(--n-30) 8%, transparent);
+  --c-fill-hover: color-mix(in oklab, var(--n-30) 13%, transparent);
+  --c-fill-press: color-mix(in oklab, var(--n-30) 19%, transparent);
+  --c-line: color-mix(in oklab, var(--n-10) 9%, transparent);
+  --c-line-strong: var(--n-50);
+
+  --c-text: var(--n-10);
+  --c-text-2: var(--n-30);
+  --c-text-3: var(--n-40);
+  --c-placeholder: var(--n-40);
+
+  --c-accent: var(--green-45);
+  --c-accent-hover: var(--green-55);
+  --c-accent-press: var(--green-35);
+  --c-on-accent: var(--n-10);
+  --c-dot: #5fb800;
+
+  --c-select-bg: var(--n-10);
+  --c-select-text: var(--n-98);
+  --c-select-text-2: var(--n-70);
+  --c-chip-bg: var(--c-fill);
+  --c-chip-text: var(--n-10);
+  --c-link: var(--n-10);
+
+  --c-ok: var(--ok-28);   --c-ok-bg: var(--ok-95);
+  --c-err: var(--err-28); --c-err-bg: var(--err-95);
+  --c-warn: var(--warn-28); --c-warn-bg: var(--warn-95);
+  --c-focus: var(--n-10);
+  --c-scrim: color-mix(in oklab, var(--n-10) 34%, transparent);
+
+  --z1: 0 0 0 .5px color-mix(in oklab, var(--n-10) 6%, transparent);
+  --z2: 0 0 0 .5px color-mix(in oklab, var(--n-10) 7%, transparent), 0 2px 8px color-mix(in oklab, var(--n-10) 4%, transparent);
+  --z3: 0 0 0 .5px color-mix(in oklab, var(--n-10) 7%, transparent), 0 8px 28px color-mix(in oklab, var(--n-10) 9%, transparent);
+
+  /* 环境光：让玻璃有东西可模糊，只在背景最底层、低透明度 */
+  --ambient: radial-gradient(60% 50% at 8% 0%, color-mix(in oklab, var(--green-45) 16%, transparent), transparent 70%),
+             radial-gradient(50% 45% at 100% 100%, color-mix(in oklab, #7aa7ff 14%, transparent), transparent 70%);
+}
+
+/* ---------- 深色 ---------- */
+.wa-dark {
+  --c-bg: var(--n-6);
+  --c-surface: var(--n-10);
+  --c-raised: var(--n-14);
+  --c-sunken: #0a0a09;
+
+  --glass-bg: color-mix(in oklab, #1d1e1c 58%, transparent);
+  --glass-bg-strong: color-mix(in oklab, #1d1e1c 76%, transparent);
+  --glass-line: color-mix(in oklab, #ffffff 13%, transparent);
+  --glass-shadow: 0 1px 0 rgba(255, 255, 255, .04) inset, 0 2px 10px rgba(0, 0, 0, .2);
+  --blur: saturate(170%) blur(24px);
+
+  --c-fill: color-mix(in oklab, var(--n-90) 10%, transparent);
+  --c-fill-hover: color-mix(in oklab, var(--n-90) 16%, transparent);
+  --c-fill-press: color-mix(in oklab, var(--n-90) 22%, transparent);
+  --c-line: color-mix(in oklab, var(--n-90) 11%, transparent);
+  --c-line-strong: var(--n-50);
+
+  --c-text: var(--n-98);
+  --c-text-2: var(--n-70);
+  --c-text-3: var(--n-60);
+  --c-placeholder: var(--n-60);
+
+  --c-accent: var(--green-45);
+  --c-accent-hover: var(--green-55);
+  --c-accent-press: var(--green-35);
+  --c-on-accent: var(--n-10);
+  --c-dot: var(--green-55);
+
+  --c-select-bg: var(--n-98);
+  --c-select-text: var(--n-10);
+  --c-select-text-2: var(--n-30);
+  --c-chip-bg: var(--c-fill);
+  --c-chip-text: var(--n-98);
+  --c-link: var(--n-98);
+
+  --c-ok: var(--ok-62);   --c-ok-bg: color-mix(in oklab, var(--ok-28) 30%, var(--n-10));
+  --c-err: var(--err-62); --c-err-bg: color-mix(in oklab, var(--err-28) 40%, var(--n-10));
+  --c-warn: var(--warn-62); --c-warn-bg: color-mix(in oklab, var(--warn-28) 36%, var(--n-10));
+  --c-focus: var(--n-98);
+  --c-scrim: color-mix(in oklab, #000 58%, transparent);
+
+  --z1: 0 0 0 .5px color-mix(in oklab, var(--n-90) 8%, transparent);
+  --z2: 0 0 0 .5px color-mix(in oklab, var(--n-90) 10%, transparent), 0 3px 10px rgba(0, 0, 0, .2);
+  --z3: 0 0 0 .5px color-mix(in oklab, var(--n-90) 12%, transparent), 0 10px 36px rgba(0, 0, 0, .32);
+
+  --ambient: radial-gradient(55% 45% at 6% 0%, color-mix(in oklab, var(--green-45) 13%, transparent), transparent 70%),
+             radial-gradient(50% 45% at 100% 100%, color-mix(in oklab, #5b86e0 12%, transparent), transparent 70%);
+}
+
+/* ---------- 映射到 Web Awesome ---------- */
+:root,
+.wa-light,
+.wa-dark {
+  --wa-font-family-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", "Noto Sans SC", system-ui, sans-serif;
+  --wa-font-family-code: "SF Mono", "Cascadia Code", "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  --wa-border-radius-s: var(--r-s);
+  --wa-border-radius-m: var(--r-m);
+  --wa-border-radius-l: var(--r-l);
+  --wa-line-height-normal: 1.55;
+
+  --wa-color-surface-default: var(--c-surface);
+  --wa-color-surface-raised: var(--c-raised);
+  --wa-color-surface-lowered: var(--c-sunken);
+  --wa-color-surface-border: var(--c-line);
+  --wa-color-text-normal: var(--c-text);
+  --wa-color-text-quiet: var(--c-text-3);
+  --wa-color-text-link: var(--c-link);
+  --wa-color-focus: var(--c-focus);
+  --wa-focus-ring-width: 2px;
+  --wa-focus-ring-offset: 2px;
+
+  --wa-color-brand-fill-loud: var(--c-accent);
+  --wa-color-brand-on-loud: var(--c-on-accent);
+  --wa-color-brand-border-loud: var(--c-accent-press);
+  --wa-color-brand-fill-normal: var(--c-fill);
+  --wa-color-brand-on-normal: var(--c-text);
+  --wa-color-brand-border-normal: var(--c-line);
+  --wa-color-brand-fill-quiet: var(--c-fill);
+  --wa-color-brand-on-quiet: var(--c-text-2);
+  --wa-color-brand-border-quiet: var(--c-line);
+
+  --wa-color-success-fill-quiet: var(--c-ok-bg);
+  --wa-color-success-fill-normal: var(--c-ok-bg);
+  --wa-color-success-on-quiet: var(--c-ok);
+  --wa-color-success-on-normal: var(--c-ok);
+  --wa-color-success-border-quiet: var(--c-ok);
+  --wa-color-success-border-normal: var(--c-ok);
+  --wa-color-success-fill-loud: var(--ok-52);
+  --wa-color-success-on-loud: var(--n-10);
+
+  --wa-color-danger-fill-quiet: var(--c-err-bg);
+  --wa-color-danger-fill-normal: var(--c-err-bg);
+  --wa-color-danger-on-quiet: var(--c-err);
+  --wa-color-danger-on-normal: var(--c-err);
+  --wa-color-danger-border-quiet: var(--c-err);
+  --wa-color-danger-border-normal: var(--c-err);
+  --wa-color-danger-fill-loud: var(--err-28);
+  --wa-color-danger-on-loud: #ffffff;
+
+  --wa-color-warning-fill-quiet: var(--c-warn-bg);
+  --wa-color-warning-fill-normal: var(--c-warn-bg);
+  --wa-color-warning-on-quiet: var(--c-warn);
+  --wa-color-warning-on-normal: var(--c-warn);
+  --wa-color-warning-border-quiet: var(--c-warn);
+  --wa-color-warning-border-normal: var(--c-warn);
+  --wa-color-warning-fill-loud: var(--warn-52);
+  --wa-color-warning-on-loud: var(--n-10);
+
+  --wa-color-neutral-fill-quiet: var(--c-fill);
+  --wa-color-neutral-fill-normal: var(--c-fill);
+  --wa-color-neutral-on-quiet: var(--c-text-2);
+  --wa-color-neutral-on-normal: var(--c-text);
+  --wa-color-neutral-border-quiet: var(--c-line);
+  --wa-color-neutral-border-normal: var(--c-line);
+  --wa-color-neutral-border-loud: var(--c-line-strong);
+  --wa-color-neutral-fill-loud: var(--n-22);
+  --wa-color-neutral-on-loud: var(--n-98);
+
+  --wa-form-control-border-color: var(--c-line-strong);
+  --wa-form-control-background-color: var(--c-surface);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --wa-transition-slow: 0ms; --wa-transition-normal: 0ms; --wa-transition-fast: 0ms; }
+}
