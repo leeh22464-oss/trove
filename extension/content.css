@@ -1,31 +1,35 @@
 /* Catch 浮球 + 菜单 + toast —— 高 z-index、不污染页面 */
 #__catch-fab {
   position: fixed; right: 18px; bottom: 18px; z-index: 2147483646;
-  width: 40px; height: 40px; border-radius: 50%; border: 0; padding: 0;
+  width: 46px; height: 46px; border-radius: 50%; border: 0; padding: 0;
   background: transparent; cursor: grab;
   display: grid; place-items: center;
-  box-shadow: 0 4px 16px rgba(0,0,0,.28), 0 0 0 .5px rgba(0,0,0,.2);
+  box-shadow: 0 4px 18px rgba(0,0,0,.32), 0 0 0 1.5px rgba(255,255,255,.9), 0 0 0 2.5px rgba(0,0,0,.15);
   transition: transform .18s cubic-bezier(.34,1.56,.64,1), box-shadow .18s;
-  opacity: .85; touch-action: none;
+  opacity: .9; touch-action: none;
 }
 #__catch-fab:hover { transform: scale(1.1); opacity: 1; }
 #__catch-fab:active { cursor: grabbing; }
-#__catch-fab svg { display: block; border-radius: 10px; }
+#__catch-fab svg { display: block; border-radius: 12px; width: 30px; height: 30px; }
 
 #__catch-menu {
-  position: fixed; right: 18px; bottom: 66px; z-index: 2147483646;
-  display: flex; flex-direction: column; gap: 2px; padding: 6px; min-width: 170px;
-  background: rgba(255,255,255,.92); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-  border: .5px solid rgba(0,0,0,.1); border-radius: 12px;
-  box-shadow: 0 8px 30px rgba(0,0,0,.18);
+  position: fixed; z-index: 2147483646;
+  display: flex; flex-direction: column; gap: 2px; padding: 6px; min-width: 176px;
+  background: rgba(255,255,255,.94); backdrop-filter: blur(16px) saturate(1.2); -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  border: .5px solid rgba(0,0,0,.12); border-radius: 14px;
+  box-shadow: 0 10px 36px rgba(0,0,0,.22);
   font: 13px -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei UI", sans-serif;
+  animation: __catch-rise .22s cubic-bezier(.34,1.4,.64,1);
 }
+@keyframes __catch-rise { from { opacity: 0; transform: translateY(6px) scale(.96); } }
 #__catch-menu button {
-  border: 0; background: transparent; padding: 8px 10px; text-align: left;
-  font: inherit; font-size: 13px; color: #1a1a19; border-radius: 8px; cursor: pointer;
+  border: 0; background: transparent; padding: 9px 12px; text-align: left;
+  font: inherit; font-size: 13px; font-weight: 500; color: #1a1a19; border-radius: 9px; cursor: pointer;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-#__catch-menu button:hover { background: rgba(0,0,0,.06); }
+#__catch-menu button:hover { background: rgba(0,0,0,.07); }
+#__catch-menu button[data-a="page"] { font-weight: 600; }
+#__catch-menu button[data-a="open"] { color: #5c5e58; }
 
 #__catch-toast {
   position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(8px);
@@ -37,3 +41,21 @@
   box-shadow: 0 8px 24px rgba(0,0,0,.3);
 }
 #__catch-toast.on { opacity: 1; transform: translateX(-50%); }
+
+/* 选区暂存条：跟随选区、可拖拽、小尺寸不挡内容 */
+#__catch-stashbar {
+  position: fixed; z-index: 2147483646; width: 224px; height: 44px;
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+  background: rgba(255,255,255,.96); backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  border: .5px solid rgba(0,0,0,.12); border-radius: 12px; box-shadow: 0 8px 28px rgba(0,0,0,.2);
+  font: 12px -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei UI", sans-serif;
+  cursor: grab; user-select: none;
+  animation: __catch-rise .18s cubic-bezier(.34,1.4,.64,1);
+}
+#__catch-stashbar.dragging { cursor: grabbing; opacity: .82; }
+#__catch-stashbar button { border:0; border-radius:8px; cursor:pointer; font: inherit; }
+#__catch-stashbar .__catch-stash-add { flex:none; height:30px; padding:0 10px; background:#90e203; color:#1c2a00; font-weight:600; }
+#__catch-stashbar .__catch-stash-add:hover { background:#7fc802; }
+#__catch-stashbar .__catch-stash-preview { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#5c5e58; }
+#__catch-stashbar .__catch-stash-close { flex:none; width:24px; height:24px; padding:0; display:grid; place-items:center; background:transparent; color:#86868b; font-size:17px; }
+#__catch-stashbar .__catch-stash-close:hover { background:rgba(0,0,0,.07); color:#1a1a19; }

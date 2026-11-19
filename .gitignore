@@ -5,4 +5,8 @@ _artifacts/
 *.log
 .DS_Store
 scripts/_*
-test/
+_*.cjs
+_*.png
+_*.mjs
+_test.cjs
+_dbg*.js

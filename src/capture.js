@@ -59,29 +59,39 @@ export class Capture {
 
     let bodyText = raw;
     let pageMeta = {};
+    let fetchFailed = false;
     if (url && !bodyText) {
-      const page = await this.fetchArticle(url, html);
-      if (page) {
-        bodyText = page.text;
-        pageMeta = { title: page.title, ogImage: page.ogImage };
+      try {
+        const page = await this.fetchArticle(url, html);
+        if (page) {
+          bodyText = page.text;
+          pageMeta = { title: page.title, ogImage: page.ogImage };
+        }
+        if (!bodyText) fetchFailed = true;
+      } catch (e) {
+        // SSRF/格式校验类安全错误不能吞，直接上抛让接口返回 400/403
+        if (e?.statusCode || e?.status === 400 || /SSRF|内网|不允许|格式/i.test(e?.message || '')) throw e;
+        fetchFailed = true;
       }
     }
 
+    if (fetchFailed && !bodyText) bodyText = `${title ? `【${title}】\n` : ''}${url}\n\n_抓取失败：未能获取网页正文（可能需要 JS 渲染、登录或被反爬）。_`;
     const { cleaned, removed, hashtagCandidates } = cleanText(bodyText || (title ? `【${title}】\n${url}` : ''));
     // 纯图片条目没有文本，空字符串的 hash 会让所有图片误判为重复；只有有文本时才算 hash
     const textForHash = (cleaned || bodyText || '').trim();
     const hash = textForHash ? contentHash(textForHash) : '';
     const sim = textForHash ? simhash(textForHash) : '';
 
-    // 精确去重
-    const dup = findDuplicates(this.db, { contentHash: hash, simhash: sim, url, excludeId: 0 });
+    // 同一网页的不同选区是独立内容，选区只按文本 hash 去重，不按来源 URL 去重
+    const isSelection = source === 'extension-selection' || sourceType === 'selection';
+    const dup = findDuplicates(this.db, { contentHash: hash, simhash: sim, url: isSelection ? '' : url, excludeId: 0 });
     if (dup.exact.length) {
       return { duplicate: { exact: dup.exact, near: dup.near }, items: [] };
     }
 
     const now = new Date().toISOString();
     const platform = platformOf(url);
-    const st = sourceType || (images.length ? 'image' : url ? 'web' : 'manual');
+    const st = sourceType || (source === 'extension-selection' ? 'selection' : images.length ? 'image' : url ? 'web' : 'manual');
     const r = this.db.prepare(`INSERT INTO items(kind,title,content,raw,summary,source_type,source_url,source_platform,lang,status,props_json,content_hash,simhash,created_at,updated_at)
       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
       .run(kindHint || 'unknown',
@@ -142,7 +152,7 @@ export class Capture {
     const it = this.db.prepare('SELECT * FROM items WHERE id=?').get(id);
     if (it) {
       it.tags = this.tags.tagsOfItem(id);
-      it.assets = this.db.prepare('SELECT id,sha256,mime,ocr_state,vision_desc,width,height FROM assets WHERE item_id=?').all(id);
+      it.assets = this.db.prepare('SELECT id,sha256,mime,ocr_state,vision_desc,width,height,kind FROM assets WHERE item_id=?').all(id);
       const notes = JSON.parse(it.ai_notes || '{}');
       const llmRemoved = [].concat(notes.llm_removed || []).filter(Boolean).map(t => ({ text: typeof t === 'string' ? t : JSON.stringify(t), reason: 'llm' }));
       it.removed = [...(notes.removed || []), ...llmRemoved];
@@ -150,7 +160,7 @@ export class Capture {
     return it;
   }
 
-  saveAsset(itemId, { buffer, mime }) {
+  saveAsset(itemId, { buffer, mime, kind = 'gallery' }) {
     if (!IMAGE_MIMES.has(mime)) throw new Error(`不支持的图片类型 ${mime}`);
     if (buffer.length > MAX_IMAGE_BYTES) throw new Error('图片过大');
     const sha = createHash('sha256').update(buffer).digest('hex');
@@ -158,15 +168,15 @@ export class Capture {
     if (existing) {
       // 图片内容重复：共享同一物理文件，给新 item 挂一条 duplicate 资产记录（含 OCR 结果，不再重复识别）
       const src = this.db.prepare('SELECT * FROM assets WHERE sha256=? LIMIT 1').get(sha);
-      this.db.prepare('INSERT INTO assets(item_id,path,sha256,mime,ocr_state,ocr_text,ocr_provider,vision_desc,width,height) VALUES(?,?,?,?,?,?,?,?,?,?)')
-        .run(itemId, existing.path || '', sha, mime, 'duplicate', src?.ocr_text || '', src?.ocr_provider || '', src?.vision_desc || '', src?.width || 0, src?.height || 0);
-      return existing.id;
+      const r = this.db.prepare('INSERT INTO assets(item_id,path,sha256,mime,ocr_state,ocr_text,ocr_provider,vision_desc,width,height,kind) VALUES(?,?,?,?,?,?,?,?,?,?,?)')
+        .run(itemId, existing.path || '', sha, mime, 'duplicate', src?.ocr_text || '', src?.ocr_provider || '', src?.vision_desc || '', src?.width || 0, src?.height || 0, kind);
+      return r.lastInsertRowid;
     }
     const fname = sha.slice(0, 24) + IMAGE_MIMES.get(mime);
     const fpath = path.join(ASSETS_DIR, fname);
     fs.writeFileSync(fpath, buffer);
-    const r = this.db.prepare('INSERT INTO assets(item_id,path,sha256,mime) VALUES(?,?,?,?)')
-      .run(itemId, fname, sha, mime);
+    const r = this.db.prepare('INSERT INTO assets(item_id,path,sha256,mime,kind) VALUES(?,?,?,?,?)')
+      .run(itemId, fname, sha, mime, kind);
     return r.lastInsertRowid;
   }
 

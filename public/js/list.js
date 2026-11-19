@@ -45,13 +45,6 @@ export async function loadList({ keepSelection = true, skeleton = false } = {}) 
   let skTimer;
   if (skeleton) skTimer = setTimeout(showSkeleton, 220); // 仅慢加载时显示，避免闪现
   try {
-  if (v.type === 'collections') {
-    // 集合总览：大屏文件夹封面墙
-    state.rows = []; state.total = 0;
-    renderCollectionsGrid();
-    return;
-  }
-  $('#colview').hidden = true; // 离开集合总览，恢复三栏
   if (v.type === 'collection') {
     const all = await get(`/api/collections/${v.id}/items`);
     const q = state.q.trim().toLowerCase();
@@ -165,24 +158,7 @@ const COL_THEMES = [
 ];
 function colIcon(name) { const t = COL_THEMES.find(([re]) => re.test(name)); return t ? t[1] : 'folder'; }
 
-export function renderCollectionsGrid() {
-  const view = $('#colview');
-  view.hidden = false;
-  view.innerHTML = `
-    <header class="colv-head">
-      <h2>集合</h2><span class="colv-count">${state.collections.length} 个</span>
-      <button class="btn sm colv-new" type="button" data-act="new-col">${icon('plus')}新建集合</button>
-    </header>
-    <div class="colv-grid" role="list">
-      ${state.collections.map((c) => `
-      <button class="colcard" type="button" role="listitem" data-col="${c.id}" data-name="${esc(c.name)}">
-        <span class="colcard-name">${esc(c.name)}</span>
-        <span class="colcard-desc">${esc(c.description || '点击打开这个集合')}</span>
-        <span class="colcard-art">${icon(colIcon(c.name))}</span>
-        <span class="colcard-n">${c.count || 0}</span>
-      </button>`).join('') || `<div class="colv-empty">还没有集合，点右上「新建集合」创建。</div>`}
-    </div>`;
-}
+export function renderCollectionsGrid() { /* 集合总览已改为悬浮面板 */ }
 
 export function renderBatchBar() {
   let bar = $('#batchBar');
@@ -197,7 +173,7 @@ export function renderBatchBar() {
   bar.innerHTML = n ? `<span class="b-n">${n} 项</span>
     ${trash
       ? `<button class="bb" type="button" data-act="restore" data-tip="恢复">${icon('undo-2')}</button><button class="bb danger" type="button" data-act="delete" data-tip="永久删除">${icon('trash-2')}</button>`
-      : `<button class="bb" type="button" data-act="tag" data-tip="加标签">${icon('hash')}</button><button class="bb" type="button" data-act="fav" data-tip="收藏">${icon('star')}</button><button class="bb" type="button" data-act="archive" data-tip="归档">${icon('archive')}</button><button class="bb danger" type="button" data-act="trash" data-tip="回收站">${icon('trash-2')}</button>`}
+      : `<button class="bb" type="button" data-act="merge" data-tip="合并成一条">${icon('merge')}</button><button class="bb" type="button" data-act="tag" data-tip="加标签">${icon('hash')}</button><button class="bb" type="button" data-act="fav" data-tip="收藏">${icon('star')}</button><button class="bb" type="button" data-act="archive" data-tip="归档">${icon('archive')}</button><button class="bb danger" type="button" data-act="trash" data-tip="回收站">${icon('trash-2')}</button>`}
     <span class="b-div"></span><button class="bb ghost" type="button" data-act="clear" data-tip="取消">${icon('x')}</button>` : '';
 }
 
@@ -269,15 +245,6 @@ export function initList() {
     e.preventDefault();
     toggleSel(Number(c.dataset.id), !state.sel.has(Number(c.dataset.id)));
   });
-  // 集合大屏：封面卡进集合，新建按钮开对话框，返回总览，条目开详情
-  $('#colview').addEventListener('click', (e) => {
-    if (e.target.closest('[data-gocols]')) { emit('go', { type: 'collections' }); return; }
-    const item = e.target.closest('.colitem');
-    if (item) { emit('open-item', Number(item.dataset.item)); return; }
-    const card = e.target.closest('.colcard');
-    if (card) { emit('go', { type: 'collection', id: Number(card.dataset.col), name: card.dataset.name }); return; }
-    if (e.target.closest('[data-act="new-col"]')) emit('dialog', 'new-collection');
-  });
   $('#list').addEventListener('click', (e) => {
     if (e.target.closest('[data-gocols]')) { emit('go', { type: 'collections' }); return; }
     const act = e.target.closest('[data-act]');
@@ -293,6 +260,29 @@ export function initList() {
     else if (a === 'archive') batch('status', { status: 'archived' });
     else if (a === 'trash') batch('status', { status: 'trash' });
     else if (a === 'restore') batch('status', { status: 'inbox' });
+    else if (a === 'merge') {
+      const items = state.rows.filter(r => state.sel.has(r.id));
+      if (items.length < 2) { toast('至少选择 2 条', { error: true }); return; }
+      const mergedText = items.map((it, i) => `【${i + 1}｜${it.title || '未命名'}】\n${it.content || ''}`).join('\n\n');
+      openDialog({
+        title: `合并 ${items.length} 条`, wide: true,
+        body: `<div class="clip-merge-list">${items.map((it, i) => `<div class="clip-merge-row"><span><strong>${esc(it.title || '(未命名)')}</strong><small>${esc(it.source_platform || it.source_url || '本地条目')}</small><span>${esc((it.summary || it.content || '').slice(0, 100))}${(it.summary || it.content || '').length > 100 ? '…' : ''}</span></span></div>`).join('')}</div><label class="clip-merge-label" for="mergePreview">合并正文（会重新清洗排版）</label><textarea id="mergePreview" class="clip-merge-text" spellcheck="false">${esc(mergedText)}</textarea><p class="hint" style="margin-top:8px;color:var(--c-text-3);font-size:12px">原条目会保留为已归档，合并条目详情里可查看每条来源和原文。</p>`,
+        foot: `<button class="btn" type="button" data-close>取消</button><button class="btn primary" type="button" id="mergeOk">合并并重新整理</button>`,
+        onMount: (d) => {
+          $('#mergeOk', d).onclick = async (e) => {
+            e.currentTarget.disabled = true; e.currentTarget.textContent = '合并中…';
+            const r = await post('/api/items/merge', { ids: [...state.sel], title: items[0].title ? `${items[0].title} 等 ${items.length} 条` : '', content: $('#mergePreview', d).value });
+            if (r.error) { e.currentTarget.disabled = false; e.currentTarget.textContent = '合并并重新整理'; toast(r.error, { error: true }); return; }
+            closeDialog();
+            state.sel.clear(); state.selectMode = false; renderBatchBar();
+            if (r.error) { toast(r.error, { error: true }); return; }
+            toast('已合并，正在重新清洗');
+            emit('refresh');
+            emit('select', r.item.id);
+          };
+        },
+      });
+    }
     else if (a === 'delete') {
       confirmDialog('永久删除选中', `将永久删除 ${state.sel.size} 条，无法恢复。`, '永久删除', true).then((ok) => ok && batch('delete'));
     }

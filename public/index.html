@@ -17,6 +17,10 @@
       if (w) document.documentElement.style.setProperty('--list-w', w + 'px');
     })();
   </script>
+  <script>
+    window.__catchSelectionClips = [];
+    window.addEventListener('catch-selection-clips', (e) => window.__catchSelectionClips.push(...(Array.isArray(e.detail) ? e.detail : [])));
+  </script>
   <script type="module" data-webawesome="/vendor/webawesome" src="/vendor/webawesome/webawesome.loader.js"></script>
   <script type="module" src="/js/app.js?v=20261112"></script>
 </head>
@@ -51,8 +55,7 @@
           <button class="icon-btn only-narrow" id="btnMenu" type="button" aria-label="打开导航"><svg class="ico" aria-hidden="true"><use href="/img/icons.svg#i-menu"/></svg></button>
           <label class="search">
             <svg class="ico" aria-hidden="true"><use href="/img/icons.svg#i-search"/></svg>
-            <input id="q" type="search" placeholder="搜索，支持 tag:  kind:  -排除" aria-label="搜索" autocomplete="off">
-            <kbd class="kbd" aria-hidden="true">/</kbd>
+            <input id="q" type="search" placeholder="搜索 · tag:标签 kind:类型 “短语” -排除" aria-label="搜索" autocomplete="off">
           </label>
         </header>
         <div class="filters seg" id="filters" role="group" aria-label="类型筛选"></div>
@@ -66,7 +69,7 @@
 
     <main class="detail" id="detail" aria-label="详情"></main>
 
-    <section class="colview" id="colview" aria-label="集合" hidden></section>
+    
 
     <div class="capture-bar" id="captureBar">
       <svg class="ico" aria-hidden="true"><use href="/img/icons.svg#i-clipboard"/></svg>
@@ -74,12 +77,12 @@
       <button class="icon-btn" id="capFile" type="button" aria-label="选择图片"><svg class="ico" aria-hidden="true"><use href="/img/icons.svg#i-image"/></svg></button>
       <input id="capFileInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>
       <button class="btn primary" id="capSave" type="button">保存</button>
-      <div class="cap-thumbs" id="capThumbs"></div>
-      <div class="cap-imgs-mode" id="capImgsMode" hidden>
+      <div class="cap-thumbs" id="capThumbs"><span class="cap-imgs-mode" id="capImgsMode" hidden>
         <span class="seg-mini" role="group" aria-label="多图方式">
           <button type="button" data-mode="merge" class="on">合并为一条</button><button type="button" data-mode="split">每张分开</button>
         </span>
-      </div>
+      </span></div>
+
     </div>
   </div>
 

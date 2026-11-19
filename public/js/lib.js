@@ -95,7 +95,9 @@ export async function copyText(text) {
 }
 
 export function timeAgo(iso) {
-  const t = new Date(iso).getTime();
+  // SQLite datetime('now') 存的是 UTC "YYYY-MM-DD HH:MM:SS"（无时区标记），
+  // new Date() 会把它当本地时间解析 → 差 8h。手动补 Z 标记为 UTC。
+  const t = new Date(iso.replace(' ', 'T') + (iso.endsWith('Z') ? '' : 'Z')).getTime();
   if (!t) return '';
   const s = Math.max(0, (Date.now() - t) / 1000);
   if (s < 60) return '刚刚';
@@ -118,9 +120,10 @@ export function openDialog({ title, body, foot = '', onMount, wide = false, cls 
   const dlg = $('#dlg');
   dlg.className = 'dlg' + (cls ? ' ' + cls : '') + (compact ? ' compact' : '');
   dlg.style.width = wide ? 'min(960px, 96vw)' : compact ? 'min(340px, 92vw)' : '';
-  const head = title ? `<div class="dlg-head"><h2>${esc(title)}</h2><button class="icon-btn" type="button" data-close aria-label="关闭">${icon('x')}</button></div>` : '';
+  const head = title !== null && title !== undefined ? `<div class="dlg-head"><h2>${esc(title)}</h2><button class="icon-btn" type="button" data-close aria-label="关闭">${icon('x')}</button></div>` : '';
   dlg.innerHTML = `${head}${cls === 'pal' ? body : `<div class="dlg-body">${body}</div>`}${foot ? `<div class="dlg-foot">${foot}</div>` : ''}`;
   dlg.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => dlg.close()));
+  dlg.addEventListener('close', () => { dlg._ft?.(); dlg._ft = null; }, { once: true });
   if (!backdropBound) {
     backdropBound = true;
     let downOnBackdrop = false;

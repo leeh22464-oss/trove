@@ -90,10 +90,12 @@ export class JobRunner {
       const related = this.tags.suggestRelevant(cleaned, parseInt(settings.get('tag_suggest_topk')) || 30);
       const seen = new Set(related.map(t => t.id));
       for (const t of this.tags.frequent(40)) if (!seen.has(t.id)) { related.push(t); seen.add(t.id); }
+      const collections = this.db.prepare('SELECT id,name,parent_id FROM collections').all();
       const { parsed, truncated } = await this.llm.extract(cleaned, {
         relatedTags: related,
         maxTags,
         customPrompt: settings.get('llm_custom_prompt'),
+        collections,
       });
       const ap = applyExtraction(parsed, cleaned);
       const notes = JSON.parse(item.ai_notes || '{}');

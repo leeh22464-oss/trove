@@ -144,6 +144,7 @@ function migrate(db) {
   // 轻量列迁移：老库补新列
   const colHas = (tbl, col) => db.prepare(`SELECT 1 FROM pragma_table_info(?) WHERE name=?`).get(tbl, col);
   if (!colHas('collections', 'cover')) db.exec(`ALTER TABLE collections ADD COLUMN cover TEXT NOT NULL DEFAULT ''`);
+  if (!colHas('assets', 'kind')) db.exec(`ALTER TABLE assets ADD COLUMN kind TEXT NOT NULL DEFAULT 'gallery'`);
 
   // FTS5 trigram：中文子串检索
   db.exec(`

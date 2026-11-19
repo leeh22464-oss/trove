@@ -299,6 +299,40 @@ export async function buildApp({ db = null, store = null, llm = null, ocr = null
     return capture.getItem(id);
   });
 
+  app.post('/api/items/merge', async (req, reply) => {
+    const ids = [...new Set((req.body?.ids || []).map(Number).filter(Boolean))];
+    if (ids.length < 2) return reply.code(400).send({ error: '至少选择 2 条' });
+    const rows = ids.map(id => theDb.prepare("SELECT * FROM items WHERE id=? AND status!='trash'").get(id)).filter(Boolean);
+    if (rows.length < 2) return reply.code(404).send({ error: '可合并条目不足 2 条' });
+    const sources = rows.map((it, i) => ({
+      id: it.id, title: it.title || '(未命名)', url: it.source_url || '', platform: it.source_platform || '',
+      kind: it.kind || '', status: it.status || '', content: it.content || '', raw: it.raw || '', summary: it.summary || '', created_at: it.created_at || '', order: i,
+    }));
+    const text = req.body?.content || rows.map((it, i) => `【来源 ${i + 1}｜${it.title || '未命名'}${it.source_platform ? `｜${it.source_platform}` : ''}】\n\n${it.raw || it.content}`).join('\n\n');
+    const title = req.body?.title || `${rows[0].title || '合并条目'} 等 ${rows.length} 条`;
+    const r = await capture.capture({
+      text, url: '', title,
+      source: 'manual', sourceType: 'merge', kindHint: req.body?.kind || '',
+    });
+    const item = r.items?.[0];
+    if (!item) return reply.code(400).send({ error: '合并失败', duplicate: r.duplicate });
+    const props = JSON.parse(item.props_json || '{}');
+    props.merge_sources = sources;
+    props.merged_from_ids = ids;
+    props.merge_created_at = new Date().toISOString();
+    theDb.prepare('UPDATE items SET props_json=? WHERE id=?').run(JSON.stringify(props), item.id);
+    for (const src of rows) {
+      theDb.prepare("UPDATE items SET status='archived', updated_at=datetime('now') WHERE id=?").run(src.id);
+      theDb.prepare('INSERT OR IGNORE INTO links(src_id,dst_id) VALUES(?,?)').run(src.id, item.id);
+      theStore.ftsUpdate(src.id);
+    }
+    theStore.ftsUpdate(item.id);
+    runner.enqueue(item.id, 'classify');
+    emit('items', { ids: [...ids, item.id] });
+    emit('item', { id: item.id });
+    return { ok: true, item: capture.getItem(item.id), archived: ids };
+  });
+
   app.post('/api/classify/plans', async (req) => plans.create(req.body || {}));
   app.get('/api/classify/plans/:id', async (req) => plans.view(req.params.id));
   app.patch('/api/classify/plans/:id', async (req) => plans.patch(req.params.id, req.body || {}));
@@ -422,7 +456,23 @@ export async function buildApp({ db = null, store = null, llm = null, ocr = null
 
   // ---------- 集合 ----------
   app.get('/api/collections', async () => {
-    const cols = theDb.prepare('SELECT c.*, (SELECT COUNT(*) FROM collection_items ci WHERE ci.collection_id=c.id) count FROM collections c ORDER BY c.name').all();
+    const cols = theDb.prepare('SELECT c.*, (SELECT COUNT(*) FROM collection_items ci WHERE ci.collection_id=c.id) own FROM collections c ORDER BY c.name').all();
+    // count 递归累计：父级显示含所有后代集合的总条数
+    const kids = new Map();
+    for (const c of cols) {
+      const p = c.parent_id || 0;
+      if (!kids.has(p)) kids.set(p, []);
+      kids.get(p).push(c.id);
+    }
+    const memo = new Map();
+    const total = (id) => {
+      if (memo.has(id)) return memo.get(id);
+      let n = cols.find((c) => c.id === id)?.own || 0;
+      for (const k of kids.get(id) || []) n += total(k);
+      memo.set(id, n);
+      return n;
+    };
+    for (const c of cols) c.count = total(c.id);
     return cols;
   });
   app.post('/api/collections', async (req) => {
@@ -635,10 +685,11 @@ export async function buildApp({ db = null, store = null, llm = null, ocr = null
     reply.header('Content-Type', `image/${ext === 'jpg' ? 'jpeg' : ext}`);
     return reply.send(fs.readFileSync(p));
   });
-  // 给已有条目加配图（辅助理解）
+  // 给已有条目加配图（辅助理解；kind=inline 为正文插图）
   app.post('/api/items/:id/assets', async (req, reply) => {
     const it = theDb.prepare('SELECT id FROM items WHERE id=?').get(Number(req.params.id));
     if (!it) return reply.code(404).send({ error: '条目不存在' });
+    const kind = req.query?.kind === 'inline' ? 'inline' : 'gallery';
     const added = [];
     if (req.isMultipart()) {
       for await (const part of req.parts()) {
@@ -646,12 +697,13 @@ export async function buildApp({ db = null, store = null, llm = null, ocr = null
         const buf = await part.toBuffer();
         if (!IMAGE_MIMES.has(part.mimetype)) continue;
         if (buf.length > MAX_IMAGE_BYTES) continue;
-        const id = capture.saveAsset(it.id, { buffer: buf, mime: part.mimetype });
+        const id = capture.saveAsset(it.id, { buffer: buf, mime: part.mimetype, kind });
         if (id) added.push(id);
       }
     } else return reply.code(400).send({ error: '需要 multipart 图片' });
-    if (added.length && theStore.settings.get('auto_ocr') !== '0') runner.enqueue(it.id, 'ocr');
-    return { ok: true, added: added.length };
+    // 正文插图不做 OCR（只辅助理解，不入识别区）
+    if (kind !== 'inline' && added.length && theStore.settings.get('auto_ocr') !== '0') runner.enqueue(it.id, 'ocr');
+    return { ok: true, added: added.length, ids: added };
   });
 
   app.get('/api/assets/:id/file', async (req, reply) => {
@@ -661,6 +713,15 @@ export async function buildApp({ db = null, store = null, llm = null, ocr = null
     if (!fs.existsSync(p)) return reply.code(404).send();
     reply.header('Content-Type', a.mime || 'image/png');
     return reply.send(fs.readFileSync(p));
+  });
+
+  app.delete('/api/assets/:id', async (req, reply) => {
+    const a = theDb.prepare('SELECT * FROM assets WHERE id=?').get(Number(req.params.id));
+    if (!a) return reply.code(404).send();
+    theDb.prepare('DELETE FROM assets WHERE id=?').run(a.id);
+    const p = path.join(ASSETS_DIR, path.basename(a.path));
+    if (fs.existsSync(p)) fs.unlinkSync(p);
+    return { ok: true };
   });
 
   // ---------- SSE ----------

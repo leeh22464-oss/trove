@@ -25,6 +25,8 @@ const NOISE_LINE_PATTERNS = [
   /^(下载|打开)app.*/i,
   /^app内打开$/i,
   /^(\d+\s*)?(条)?(评论|回复|赞|转发)$/,
+  /^置顶评论$/,
+  /^评论\s*\d+$/,
   /^(已复制|复制成功)$/,
   /^(编辑|删除|举报|屏蔽)$/,
 ];
@@ -36,6 +38,12 @@ const TIMESTAMP_LINE = /^(\d{4}[-/年]\d{1,2}[-/月]\d{1,2}日?|\d{1,2}[:：]\d{
 const SOCIAL_HEADER = /^@?[\w一-龥_\-]{1,30}\s*[·•|]\s*(\d+\s*(s|m|h|d|w|秒|分钟|小时|天|周|个月|月|年)前?|\d{4}[-/]\d{1,2}[-/]\d{1,2})$/i;
 const ROLE_PREFIX = /^(chatgpt said:|you said:|claude said:|claude:|assistant:|user:|human:|ai:|kimi:|gemini:|deepseek:|copilot:)\s*/i;
 const HASHTAG = /#[^\s#]{1,40}#|#[\p{L}\p{N}_-]{1,40}/gu;
+// 评论区起始标记：截断其后全部内容（社媒/社区抓取的评论串混进正文）
+const COMMENT_BLOCK = /(共\s*\d+\s*条评论|查看全部\s*\d+\s*条评论|全部评论|评论区)[^\n]*/;
+// 评论行模式：用户名 回复 用户名 : ...（多条连续出现即评论区）
+const COMMENT_LINE = /^[\w一-龥_\-·]{1,20}\s+回复\s+[\w一-龥_\-·]{1,20}\s*[:：]/;
+// 评论尾巴：日期+地区+数字（可选「回复」）+用户名（如「10-11广东 9260 回复  瑜驾亲征 斌临城下」）
+const COMMENT_META = /\d{1,2}[-/]\d{1,2}\s*[\u4e00-\u9fa5]{2,4}\s+[\d.,万]+\s*(回复\s+)?[\w一-龥_\-·]{2,20}(?:\s+[\w一-龥_\-·]{2,20})*/g;
 const MD_LINK = /\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)/g;
 const URL_RE = /https?:\/\/[^\s<>"')\]]+/g;
 
@@ -97,8 +105,35 @@ export function cleanText(raw, opts = {}) {
   }
 
   let cleaned = out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+
+  // 评论区截断：正文里混入「共 N 条评论 / 评论区」后，其后内容整体丢弃
+  const cb = cleaned.search(COMMENT_BLOCK);
+  if (cb > -1) {
+    removed.push({ text: cleaned.slice(cb, Math.min(cb + 60, cleaned.length)) + '…', reason: 'comment_block' });
+    cleaned = cleaned.slice(0, cb);
+    // 评论块前的「日期+地区」短尾（如「10-20 江苏」）一并去掉
+    cleaned = cleaned.replace(/\s*\d{1,2}[-/]\d{1,2}\s*[\u4e00-\u9fa5]{2,4}\s*$/, '');
+  }
+  // 连续评论行（社媒评论串挤一行时按「名字 回复 名字 :」切分，从首个评论块起截断）
+  const cl = cleaned.search(new RegExp(`[^\\n]*${COMMENT_LINE.source.slice(1)}`));
+  if (cl > -1 && (cleaned.slice(cl).match(/回复\s+[\w一-龥_\-·]{1,20}\s*[:：]/g) || []).length >= 2) {
+    removed.push({ text: cleaned.slice(cl, Math.min(cl + 60, cleaned.length)) + '…', reason: 'comment_block' });
+    cleaned = cleaned.slice(0, cl);
+  }
+  // 正文中间的社媒互动数据尾巴（如「10-11广东 9260 回复 用户名」）——出现 2+ 次时逐个删除，不截断
+  const metaMatches = cleaned.match(COMMENT_META) || [];
+  if (metaMatches.length >= 2) {
+    removed.push({ text: metaMatches.slice(0, 3).join(' / ') + '…', reason: 'comment_block' });
+    cleaned = cleaned.replace(COMMENT_META, ' ');
+    // 「置顶评论」标记一并删除
+    cleaned = cleaned.replace(/置顶评论\s*/g, '');
+  }
+
   cleaned = cleaned.replace(/FENCE_(\d+)/g, (_, i) => '\n' + fences[+i] + '\n')
     .replace(/\n{3,}/g, '\n\n').trim();
+
+  // 中文数字列表转 markdown 有序列表：「1，」「2，」→换行+「1.」「2.」让 marked 渲染成列表
+  cleaned = cleaned.replace(/\s*(\d+)，/g, '\n\n$1. ').replace(/^\s*(\d+)\. /m, '$1. ');
 
   return { cleaned, removed, hashtagCandidates };
 }

@@ -3,34 +3,107 @@
 <head>
 <meta charset="utf-8">
 <style>
-  :root { --ac:#90e203; --n10:#1a1a19; --n30:#4d4f4a; --n50:#81837c; --n90:#e6e6e5; --n96:#f5f5f4; }
-  * { box-sizing: border-box; margin: 0; font-family: -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei UI",sans-serif; }
-  body { width: 300px; padding: 14px; background: #fff; color: var(--n10); }
-  h1 { font-size: 15px; font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
-  h1::before { content:''; width: 8px; height: 8px; border-radius: 50%; background: var(--ac); }
-  .meta { font-size: 12px; color: var(--n50); margin-bottom: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  textarea { width: 100%; min-height: 80px; padding: 8px; border: 1px solid var(--n90); border-radius: 8px; font: inherit; font-size: 13px; resize: vertical; outline: none; }
-  textarea:focus { border-color: var(--n30); }
-  .row { display: flex; gap: 6px; margin-top: 10px; }
-  button { flex: 1; padding: 8px 0; border: 0; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; background: var(--n96); color: var(--n10); transition: background .15s; }
-  button:hover { background: var(--n90); }
-  button.pri { background: var(--ac); }
-  button.pri:hover { filter: brightness(1.05); }
-  .stat { font-size: 12px; margin-top: 10px; min-height: 16px; }
-  .stat.ok { color: #1d724a; } .stat.err { color: #7b2214; }
-  .opts { margin-top: 8px; font-size: 12px; color: var(--n50); cursor: pointer; text-align: center; }
-  .opts:hover { color: var(--n10); }
+  :root {
+    --ac:#90e203;
+    --bg:#f5f5f7;            /* Apple 系统灰 */
+    --surface:#ffffff;
+    --text:#1d1d1f;
+    --muted:#86868b;
+    --line:#d2d2d7;
+    --btn:#e8e8ed;
+    --btn-hover:#dedee3;
+    --blue:var(--ac);        /* 主色=Catch 绿 */
+    --green:#30d158;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Helvetica Neue", "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased; }
+  body { width: 340px; background: var(--bg); color: var(--text); overflow: hidden; }
+
+  /* ---- 顶部：品牌 + 页面信息 ---- */
+  .hd { padding: 20px 20px 0; display: flex; align-items: center; gap: 10px; }
+  .logo {
+    width: 30px; height: 30px; border-radius: 9px; flex: none;
+    background: linear-gradient(160deg, #2a2a2c, #131315);
+    display: grid; place-items: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.12);
+  }
+  .logo svg { width: 18px; height: 18px; }
+  .hd-txt h1 { font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+  .hd-txt .meta { font-size: 11px; color: var(--muted); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
+
+  /* ---- 输入区：Apple 式白卡 ---- */
+  .in { padding: 14px 20px 0; }
+  textarea {
+    width: 100%; min-height: 84px; padding: 11px 13px;
+    border: 0; border-radius: 13px; outline: none; resize: vertical;
+    background: var(--surface); font: inherit; font-size: 13.5px; line-height: 1.45;
+    box-shadow: 0 0 0 .5px var(--line), 0 1px 3px rgba(0,0,0,.04);
+    transition: box-shadow .2s;
+  }
+  textarea:focus { box-shadow: 0 0 0 .5px var(--ac), 0 0 0 3.5px rgba(144,226,3,.2); }
+  textarea::placeholder { color: var(--muted); }
+
+  /* ---- 操作按钮：全宽主按钮 + 次要按钮 ---- */
+  .acts { padding: 12px 20px 0; display: flex; flex-direction: column; gap: 8px; }
+  button {
+    width: 100%; padding: 10px 0; border: 0; border-radius: 10px;
+    font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer;
+    transition: background .15s, opacity .1s, transform .1s;
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+  }
+  button:active { transform: scale(.985); }
+  .pri { background: var(--ac); color: #1c2a00; }
+  .pri:hover { background: #7fc802; }
+  .sec { background: var(--btn); color: var(--text); font-weight: 500; }
+  .sec:hover { background: var(--btn-hover); }
+  .sec svg { width: 15px; height: 15px; opacity: .75; }
+
+  .row2 { display: flex; gap: 8px; }
+  .row2 button { flex: 1; }
+  .clips { padding: 14px 20px 0; }
+  .clips-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; font-size:12px; font-weight:600; }
+  .clips-head span { color:var(--muted); font-weight:400; }
+  .clip-list { display:flex; flex-direction:column; gap:6px; max-height:210px; overflow:auto; }
+  .clip-row { display:flex; align-items:flex-start; gap:7px; padding:8px 9px; border-radius:9px; background:var(--surface); box-shadow:0 0 0 .5px var(--line); }
+  .clip-row input { margin-top:2px; accent-color:var(--ac); }
+  .clip-row p { flex:1; min-width:0; max-height:52px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; line-height:1.4; }
+  .clip-row button { width:22px; padding:2px; border-radius:6px; background:transparent; color:var(--muted); font-size:16px; }
+  .clip-row button:hover { background:var(--btn); color:var(--text); }
+  .clips-empty { padding:12px; color:var(--muted); font-size:12px; text-align:center; background:var(--surface); border-radius:9px; }
+  .clip-actions { display:flex; gap:8px; margin-top:8px; }
+  .clip-actions button { flex:1; padding:8px 0; font-size:12px; }
+  .clip-source { color:var(--muted); font-size:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:3px; }
+
+  /* ---- 状态 + 底部 ---- */
+  .stat { padding: 0 20px; font-size: 12px; margin-top: 10px; min-height: 0; }
+  .stat:empty { display: none; }
+  .stat.ok { color: #248a3d; } .stat.err { color: #d70015; }
+  .opts { padding: 14px 20px 18px; font-size: 12px; color: var(--muted); cursor: pointer; text-align: center; }
+  .opts:hover { color: var(--text); }
 </style>
 </head>
 <body>
-  <h1>保存到 Catch</h1>
-  <div class="meta" id="meta">读取当前页…</div>
-  <textarea id="text" placeholder="粘贴内容，或留空保存当前页链接"></textarea>
-  <div class="row">
-    <button id="saveSel">存选区</button>
-    <button id="saveText">存文本</button>
-    <button id="savePage" class="pri">存页面</button>
+  <div class="hd">
+    <span class="logo"><svg viewBox="0 0 32 32" fill="none"><path d="M21.7 11.2A7.4 7.4 0 1 0 21.7 20.8" stroke="#fafafa" stroke-width="2.8" stroke-linecap="round"/><circle cx="22.6" cy="16" r="2.3" fill="#90e203"/></svg></span>
+    <div class="hd-txt">
+      <h1>保存到 Catch</h1>
+      <div class="meta" id="meta">读取当前页…</div>
+    </div>
   </div>
+  <div class="in"><textarea id="text" placeholder="粘贴内容，或留空保存当前页"></textarea></div>
+  <div class="acts">
+    <button id="savePage" class="pri">存当前页</button>
+    <div class="row2">
+      <button id="saveSel" class="sec">暂存选区</button>
+      <button id="saveText" class="sec">存文本</button>
+    </div>
+  </div>
+  <section class="clips" aria-label="选区暂存区">
+    <div class="clips-head">选区暂存区 <span id="clipCount">0 段</span></div>
+    <div class="clip-list" id="clipList"></div>
+    <div class="clip-actions"><button id="sendClips" class="pri">合并所选并发送到 Catch</button><button id="clearClips" class="sec">清空</button></div>
+  </section>
   <div class="stat" id="stat"></div>
   <div class="opts" id="opts">设置服务地址 / token</div>
   <script src="popup.js"></script>

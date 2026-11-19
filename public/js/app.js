@@ -6,13 +6,219 @@ import { showItem, renderEmpty, refreshCurrent, copyItem, toggleFavorite, curren
 import { openPlan, closePlan } from './plan.js';
 import { openSettings, openIo, openPending, openKind, openCollection, openNewCollection } from './dialogs.js';
 import { openPalette, paletteKeyLabel } from './palette.js';
+import { initLiquidChrome } from './liquidChrome.js';
 
 const app = $('#app');
 const narrow = () => matchMedia('(max-width: 880px)').matches;
 
 function setView(v) { app.dataset.view = v; }
 
+function openSelectionClips(clips) {
+  const list = clips.filter(c => c?.text?.trim());
+  if (!list.length) { toast('没有可合并的暂存文字', { error: true }); return; }
+  const checked = new Set(list.map((_, i) => i));
+  const renderRows = () => list.map((c, i) => `<label class="clip-merge-row"><input type="checkbox" data-clip="${i}" checked><span><strong>片段 ${i + 1}</strong><small>${esc(c.title || c.url || '')}</small><span>${esc(c.text.slice(0, 120))}${c.text.length > 120 ? '…' : ''}</span></span></label>`).join('');
+  const merged = () => list.filter((_, i) => checked.has(i)).map(c => c.text.trim()).join('\n\n');
+  openDialog({
+    title: `合并选区 · ${list.length} 段`,
+    body: `<div class="clip-merge-list">${renderRows()}</div><label class="clip-merge-label" for="clipMergeText">清洗前内容（可编辑）</label><textarea id="clipMergeText" class="clip-merge-text" spellcheck="false"></textarea>`,
+    foot: '<button class="btn" type="button" data-close>取消</button><button class="btn primary" type="button" id="clipMergeSave">合并并清洗保存</button>',
+    onMount: (d) => {
+      const textarea = $('#clipMergeText', d);
+      textarea.value = merged();
+      d.querySelectorAll('[data-clip]').forEach(box => box.addEventListener('change', () => {
+        const i = Number(box.dataset.clip);
+        box.checked ? checked.add(i) : checked.delete(i);
+        textarea.value = merged();
+      }));
+      $('#clipMergeSave', d).onclick = async (e) => {
+        const text = textarea.value.trim();
+        if (!text) { toast('合并内容不能为空', { error: true }); return; }
+        e.currentTarget.disabled = true; e.currentTarget.textContent = '保存中…';
+        try {
+          const source = list.find((_, i) => checked.has(i)) || list[0];
+          const r = await post('/api/capture', { text, url: source.url || '', title: source.title || '', source: 'extension-selection-batch' });
+          closeDialog();
+          if (r.count) {
+            toast('已合并保存，正在清洗');
+            if (state.view.type !== 'inbox') await go({ type: 'inbox' }); else await refresh();
+            if (r.items?.[0]) await select(r.items[0].id);
+          } else toast(`已有相同内容：${r.duplicate?.exact?.[0]?.title || ''}`);
+        } catch (err) { toast(err.message, { error: true }); e.currentTarget.disabled = false; e.currentTarget.textContent = '合并并清洗保存'; }
+      };
+    },
+  });
+}
+
+let catchAppStarted = false;
+window.__catchClipsReady = () => catchAppStarted;
+const pendingSelectionClips = [];
+window.addEventListener('catch-selection-clips', e => {
+  const clips = Array.isArray(e.detail) ? e.detail : [];
+  if (!clips.length) return;
+  if (catchAppStarted) openSelectionClips(clips);
+  else pendingSelectionClips.push(...clips);
+});
+
+// 液态金属背景单例：总览/下钻/条目浮层共用一份，引用计数管理生命周期
+const chromeBg = { host: null, stop: null, refs: 0 };
+function chromeBgAcquire() {
+  if (!chromeBg.host) {
+    chromeBg.host = document.createElement('div');
+    chromeBg.host.className = 'ft-host'; chromeBg.host.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(chromeBg.host);
+    chromeBg.stop = initLiquidChrome(chromeBg.host, { color: '#9ecb6a', speed: 0.25, amplitude: 0.4, detail: 5, thickness: 1.1, depth: 1, roughness: 0.35, exposure: 1.1, interactive: true, rippleStrength: 1, tilt: 1 });
+  }
+  let released = false;
+  return () => { if (released) return; released = true; chromeBg.stop?.(); chromeBg.stop = null; chromeBg.host?.remove(); chromeBg.host = null; };
+}
+
+// 集合条目浮层：悬浮展示该集合条目，液态金属背景，不切主视图
+async function openCollectionView(col, back) {
+  const items = await get(`/api/collections/${col.id}/items`);
+  openDialog({
+    title: col.name, wide: true, cls: 'colsheet',
+    body: `<div class="colv-content items-view">${items.length
+      ? `<ul class="colitems">${items.map((it) => `<li><div class="colit" role="button" tabindex="0" data-open="${it.id}"><div class="ci-row"><div class="ci-title">${esc(it.title || '(未命名)')}</div><div class="ci-kind" data-k="${esc(it.kind)}">${esc({ prompt: 'prompt', skill: 'skill', snippet: '片段', note: '笔记', resource: '推荐资源', unknown: '未分类' }[it.kind] || it.kind)}</div></div><div class="ci-sum">${esc((it.summary || '').slice(0, 60))}</div></div></li>`).join('')}</ul>`
+      : '<p class="empty-hint">这个集合还没有条目。把条目加进来后在这里快速浏览。</p>'}</div>`,
+    onMount: (d) => {
+      d._ft = chromeBgAcquire();
+      const head = d.querySelector('.dlg-head');
+      if (head && back) {
+        const backBtn = document.createElement('button');
+        backBtn.className = 'btn sm ghost'; backBtn.type = 'button'; backBtn.innerHTML = `${icon('arrow-left', 'ico-sm')}`;
+        backBtn.onclick = back;
+        head.insertBefore(backBtn, head.firstChild);
+      }
+      d.onclick = async (e) => {
+        const b = e.target.closest('[data-open]');
+        if (b) { closeDialog(); await go({ type: 'all' }); await select(Number(b.dataset.open)); }
+      };
+      d.onkeydown = async (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        const b = e.target.closest('[data-open]');
+        if (b) { e.preventDefault(); closeDialog(); await go({ type: 'all' }); await select(Number(b.dataset.open)); }
+      };
+    },
+  });
+}
+
+// 集合总览浮层：悬浮显示集合卡片，两级嵌套导航，不切主视图
+async function openCollectionsSheet() {
+  await refreshNav();
+  const kids = (pid) => state.collections.filter((c) => (c.parent_id || null) === pid);
+  const nameOf = (id) => state.collections.find((x) => x.id === id)?.name;
+
+  // 精致拟物文件夹 SVG：背部板+前盖+纸张+主题图标，渐变高光质感
+
+  const path = []; // 层级栈：[{id, name}, ...]
+  const show = (pid, parentName) => {
+    const cols = kids(pid);
+    const grid = `<div class="colv-grid" role="list">${cols.map((c) => `
+      <button class="colcard" type="button" role="listitem" data-col="${c.id}" data-name="${esc(c.name)}" style="--cf-col:#a8d94a">
+        <span class="cover" aria-hidden="true" ${localStorage.getItem(`col-bg-${c.id}`) ? `style="background-image:url(${localStorage.getItem(`col-bg-${c.id}`)})"` : ''}></span>
+        <span class="content">
+          <span class="title">${esc(c.name)}</span>
+          <span class="stats"><span class="count"><strong class="number">${c.count || 0}</strong><span class="unit">条</span></span></span>
+        </span>
+      </button>`).join('')}</div>`;
+    openDialog({
+      title: pid ? parentName : '', wide: true, cls: 'colsheet',
+      body: `<div class="colv-content">${cols.length ? grid : '<p class="empty-hint">这一层还没有集合。</p>'}</div>`,
+      onMount: (d) => {
+        d._ft = chromeBgAcquire();
+        const head = d.querySelector('.dlg-head');
+        if (head) {
+          if (pid) {
+            const back = document.createElement('button');
+            back.className = 'btn sm ghost'; back.type = 'button'; back.innerHTML = `${icon('arrow-left', 'ico-sm')}`;
+            back.onclick = () => {
+              path.pop(); // 弹出当前层
+              const prev = path[path.length - 1];
+              show(prev ? prev.id : null, prev ? prev.name : null);
+            };
+            head.insertBefore(back, head.firstChild);
+          }
+          const newBtn = document.createElement('button');
+          newBtn.className = 'btn sm'; newBtn.type = 'button'; newBtn.innerHTML = `${icon('plus', 'ico-sm')}新建集合`;
+          newBtn.onclick = () => { closeDialog(); emit('dialog', 'new-collection'); };
+          if (pid) head.insertBefore(newBtn, head.querySelector('.icon-btn')); else head.insertBefore(newBtn, head.firstChild);
+        }
+        d.onclick = (e) => {
+          const card = e.target.closest('.colcard');
+          if (!card) return;
+          const id = Number(card.dataset.col), name = card.dataset.name;
+          if (kids(id).length) { path.push({ id, name }); show(id, name); }
+          else {
+            path.push({ id, name });
+            openCollectionView({ id, name }, () => {
+              path.pop();
+              const prev = path[path.length - 1];
+              show(prev ? prev.id : null, prev ? prev.name : null);
+            });
+          }
+        };
+        // 右键卡片：更换/清除封面背景图
+        d.oncontextmenu = (e) => {
+          const card = e.target.closest('.colcard');
+          if (!card) return;
+          const cover = card.querySelector('.cover');
+          if (!cover) return;
+          e.preventDefault();
+          const id = Number(card.dataset.col);
+          const key = `col-bg-${id}`;
+          const menu = document.createElement('div');
+          menu.className = 'ctx-menu';
+          menu.innerHTML = `<button type="button" data-a="set">更换封面图</button>${localStorage.getItem(key) ? '<button type="button" data-a="clear">恢复默认</button>' : ''}`;
+          const cr = card.getBoundingClientRect();
+          menu.style.cssText = `position:fixed;left:${cr.left + cr.width / 2}px;top:${cr.bottom + 8}px;transform:translateX(-50%);z-index:2147483647;`;
+          (d || document.body).appendChild(menu);
+          // 防止菜单跑出屏幕边缘
+          requestAnimationFrame(() => {
+            const r = menu.getBoundingClientRect();
+            if (r.left < 8) menu.style.left = `${8 + r.width / 2}px`;
+            if (r.right > innerWidth - 8) menu.style.left = `${innerWidth - 8 - r.width / 2}px`;
+            if (r.bottom > innerHeight - 8) { menu.style.top = `${cr.top - 8 - r.height}px`; }
+          });
+          const cleanup = () => { menu.remove(); document.removeEventListener('pointerdown', off, true); };
+          const off = (ev) => { if (!menu.contains(ev.target)) cleanup(); };
+          document.addEventListener('pointerdown', off, true);
+          menu.onclick = (ev) => {
+            const act = ev.target.dataset.a;
+            cleanup();
+            if (act === 'clear') { localStorage.removeItem(key); cover.style.backgroundImage = ''; }
+            if (act !== 'set') return;
+            const inp = document.createElement('input');
+            inp.type = 'file'; inp.accept = 'image/*';
+            inp.onchange = () => {
+              const f = inp.files[0];
+              if (!f) return;
+              const img = new Image();
+              img.onload = () => {
+                const MAX = 720;
+                const sc = Math.min(1, MAX / Math.max(img.width, img.height));
+                const cv = document.createElement('canvas');
+                cv.width = Math.round(img.width * sc); cv.height = Math.round(img.height * sc);
+                cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+                const url = cv.toDataURL('image/jpeg', .82);
+                try { localStorage.setItem(key, url); } catch (_) {}
+                cover.style.backgroundImage = `url(${url})`;
+              };
+              img.src = URL.createObjectURL(f);
+            };
+            inp.click();
+          };
+        };
+      },
+    });
+  };
+  show(null);
+}
+
 async function go(view) {
+  // collection / collections 弹浮层，不改变主视图
+  if (view.type === 'collection') { await openCollectionView(view, () => openCollectionsSheet()); renderNav(); return; }
+  if (view.type === 'collections') { await openCollectionsSheet(); renderNav(); return; }
   state.view = view;
   state.selectedId = null;
   state.sel.clear(); state.selectMode = false;
@@ -20,7 +226,6 @@ async function go(view) {
   $('#scrim').hidden = true;
   closePlan();
   if (view.type === 'plan') { setView('plan'); renderNav(); openPlan(); return; }
-  if (view.type === 'collections') { setView('collections'); renderNav(); await loadList({ keepSelection: false, skeleton: true }); return; }
   setView('list');
   renderEmpty();
   renderNav();
@@ -53,8 +258,11 @@ const capText = $('#capText');
 
 let imgMode = 'merge'; // merge=合并为一条 / split=每张分开
 function renderThumbs() {
-  $('#capThumbs').innerHTML = pics.map((p, i) => `<div class="cap-thumb"><img src="${p.url}" alt="待上传图片 ${i + 1}"><button type="button" data-rm="${i}" aria-label="移除图片 ${i + 1}">${icon('x', 'ico-sm')}</button></div>`).join('');
-  $('#capImgsMode').hidden = pics.length < 2;
+  const box = $('#capThumbs');
+  const mode = $('#capImgsMode');
+  box.innerHTML = pics.map((p, i) => `<div class="cap-thumb"><img src="${p.url}" alt="待上传图片 ${i + 1}"><button type="button" data-rm="${i}" aria-label="移除图片 ${i + 1}">${icon('x', 'ico-sm')}</button></div>`).join('');
+  if (mode) { box.appendChild(mode); mode.hidden = pics.length < 2; }
+  box.classList.toggle('has-pics', pics.length > 0);
 }
 $('#capImgsMode').onclick = (e) => {
   const b = e.target.closest('[data-mode]');
@@ -260,4 +468,9 @@ renderEmpty();
     await refreshNav();
     await go({ type: state.counts.inbox ? 'inbox' : 'all' });
   } catch (e) { toast(e.message, { error: true }); }
+  catchAppStarted = true;
+  const pending = [...(window.__catchSelectionClips || []), ...pendingSelectionClips];
+  window.__catchSelectionClips = [];
+  pendingSelectionClips.length = 0;
+  if (new URLSearchParams(location.search).has('captureClips') && pending.length) openSelectionClips(pending);
 })();

@@ -32,6 +32,55 @@
   });
   fab.addEventListener('pointerup', () => { drag = null; });
 
+  // ---- 选区暂存条：出现在选区附近，可拖拽，不挡继续选择 ----
+  let stashBar = null, stashText = '', stashDrag = null;
+  const removeStashBar = () => { stashBar?.remove(); stashBar = null; stashText = ''; };
+  const positionStashBar = (rect) => {
+    if (!stashBar) return;
+    const w = 224, h = 44;
+    const left = Math.min(Math.max(rect.left + (rect.width - w) / 2, 8), innerWidth - w - 8);
+    let top = rect.top - h - 10;
+    if (top < 8) top = Math.min(rect.bottom + 10, innerHeight - h - 8);
+    stashBar.style.left = left + 'px';
+    stashBar.style.top = top + 'px';
+  };
+  const updateStashBar = async () => {
+    const sel = window.getSelection();
+    const text = (sel?.toString() || '').trim();
+    if (!text || !sel.rangeCount) { if (stashBar && !stashBar.classList.contains('dragging')) removeStashBar(); return; }
+    stashText = text;
+    const preview = text.slice(0, 34) + (text.length > 34 ? '…' : '');
+    if (!stashBar) {
+      stashBar = document.createElement('div');
+      stashBar.id = '__catch-stashbar';
+      stashBar.innerHTML = `<button type="button" class="__catch-stash-add">暂存</button><span class="__catch-stash-preview"></span><button type="button" class="__catch-stash-close" aria-label="关闭暂存条">×</button>`;
+      document.documentElement.appendChild(stashBar);
+      stashBar.querySelector('.__catch-stash-add').onclick = async (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const r = await chrome.runtime.sendMessage({ type: 'stashSelection', clip: { text: stashText, url: location.href, title: document.title } });
+        toast(r?.error ? '暂存失败：' + r.error : r?.duplicate ? '这段文字已经暂存' : `已暂存，共 ${r.count} 段`);
+        removeStashBar();
+      };
+      stashBar.querySelector('.__catch-stash-close').onclick = (e) => { e.preventDefault(); e.stopPropagation(); removeStashBar(); };
+      stashBar.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('button')) return;
+        stashBar.classList.add('dragging');
+        stashDrag = { x: e.clientX, y: e.clientY, r: stashBar.getBoundingClientRect() };
+        stashBar.setPointerCapture(e.pointerId);
+      });
+      stashBar.addEventListener('pointermove', (e) => {
+        if (!stashDrag) return;
+        stashBar.style.left = Math.min(Math.max(stashDrag.r.left + e.clientX - stashDrag.x, 8), innerWidth - stashBar.offsetWidth - 8) + 'px';
+        stashBar.style.top = Math.min(Math.max(stashDrag.r.top + e.clientY - stashDrag.y, 8), innerHeight - stashBar.offsetHeight - 8) + 'px';
+      });
+      stashBar.addEventListener('pointerup', () => { stashDrag = null; stashBar.classList.remove('dragging'); });
+      stashBar.addEventListener('mousedown', e => e.preventDefault()); // 不让点击按钮清空网页选区
+    }
+    stashBar.querySelector('.__catch-stash-preview').textContent = preview;
+    positionStashBar(sel.getRangeAt(0).getBoundingClientRect());
+  };
+  document.addEventListener('selectionchange', () => requestAnimationFrame(updateStashBar));
+
   // ---- 菜单 ----
   let menu = null;
   const closeMenu = () => { menu?.remove(); menu = null; };
@@ -43,13 +92,18 @@
     menu.id = '__catch-menu';
     const r = fab.getBoundingClientRect();
     menu.style.left = Math.min(r.left, innerWidth - 190) + 'px';
-    menu.style.top = Math.max(r.top - 140, 8) + 'px';
+    menu.style.top = Math.max(r.top - 140, 8) + 'px'; // 初始占位，渲染后按实际高度修正
     const sel = (window.getSelection() || '').toString().trim();
     menu.innerHTML = `
       <button data-a="page">存当前页（正文+图）</button>
       ${sel ? `<button data-a="sel">存选中 ${sel.length > 10 ? sel.slice(0, 10) + '…' : sel}</button>` : ''}
       <button data-a="open">打开 Catch</button>`;
     document.documentElement.appendChild(menu);
+    // 按菜单实际高度定位：贴浮球上方，不预留空白
+    requestAnimationFrame(() => {
+      const mh = menu.getBoundingClientRect().height;
+      menu.style.top = Math.max(r.top - mh - 8, 8) + 'px';
+    });
     menu.onclick = async (e) => {
       const a = e.target.dataset?.a;
       if (!a) return;
@@ -58,6 +112,11 @@
       toast('抓取中…');
       const payload = await buildPayload(a);
       toast(`抓取中…（${payload.images.length} 张图）`);
+      if (a === 'sel') {
+        const r = await chrome.runtime.sendMessage({ type: 'stashSelection', clip: { text: payload.text, url: payload.url, title: payload.title } });
+        toast(r?.error ? '暂存失败：' + r.error : r?.duplicate ? '这段文字已经暂存' : `已暂存，共 ${r.count} 段`);
+        return;
+      }
       const r = await chrome.runtime.sendMessage({ type: 'capture', payload });
       toast(r?.error ? '保存失败：' + r.error : (r?.count ? '已保存到 Catch' : '已存在相同内容'));
     };

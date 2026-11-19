@@ -38,11 +38,46 @@ async function savePage(tab) {
   } catch (e) { notify('保存失败', String(e.message || e), false); }
 }
 
-async function saveSelection(tab, text) {
+async function stashSelection(clip) {
+  const value = String(clip?.text || '').trim();
+  if (!value) return { error: '没有选中文本' };
   try {
-    const r = await capture({ text: text || '', url: tab.url, title: tab.title, source: 'extension-selection' });
-    notify('已保存选区', r.count ? '已入收件箱' : '已存在相同内容', true);
-  } catch (e) { notify('保存失败', String(e.message || e), false); }
+    const data = await chrome.storage.local.get('catch.selectionClips');
+    const clips = Array.isArray(data['catch.selectionClips']) ? data['catch.selectionClips'] : [];
+    if (clips.some(c => c.text.trim() === value)) return { count: clips.length, duplicate: true };
+    clips.push({ text: value, url: clip.url || '', title: clip.title || '', addedAt: Date.now() });
+    await chrome.storage.local.set({ 'catch.selectionClips': clips });
+    return { count: clips.length };
+  } catch (e) { return { error: String(e.message || e) }; }
+}
+
+async function saveSelection(tab, text) {
+  const r = await stashSelection({ text, url: tab.url, title: tab.title });
+  notify(r.error ? '暂存失败' : '选区已暂存', r.error || (r.duplicate ? '这段文字已经暂存' : `目前共 ${r.count} 段，可在扩展面板里勾选合并`), !r.error);
+}
+
+async function openCatchWithClips(clips) {
+  const { server } = await cfg();
+  const tab = await chrome.tabs.create({ url: server + '/?captureClips=1' });
+  await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => { chrome.tabs.onUpdated.removeListener(onUpdated); reject(new Error('打开 Catch 超时')); }, 15000);
+    const finish = () => { clearTimeout(timeout); chrome.tabs.onUpdated.removeListener(onUpdated); resolve(); };
+    const onUpdated = (id, info) => { if (id === tab.id && info.status === 'complete') finish(); };
+    chrome.tabs.onUpdated.addListener(onUpdated);
+    chrome.tabs.get(tab.id, current => { if (current?.status === 'complete') finish(); });
+  });
+  const [r] = await chrome.scripting.executeScript({
+    target: { tabId: tab.id }, world: 'MAIN', args: [clips],
+    func: async (selected) => {
+      const deadline = Date.now() + 10000;
+      while (Date.now() < deadline) {
+        if (window.__catchClipsReady?.()) { window.dispatchEvent(new CustomEvent('catch-selection-clips', { detail: selected })); return true; }
+        await new Promise(r => setTimeout(r, 100));
+      }
+      return false;
+    },
+  });
+  if (!r?.result) throw new Error('Catch 页面未就绪，请刷新后重试');
 }
 
 async function saveImage(tab, srcUrl) {
@@ -109,6 +144,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   if (msg.type === 'capture') {
     capture(msg.payload).then(sendResponse).catch((e) => sendResponse({ error: String(e.message || e) }));
+    return true;
+  }
+  if (msg.type === 'stashSelection') {
+    stashSelection(msg.clip).then(sendResponse);
+    return true;
+  }
+  if (msg.type === 'openCatchWithClips') {
+    openCatchWithClips(msg.clips || []).then(() => sendResponse({ ok: true })).catch((e) => sendResponse({ error: String(e.message || e) }));
     return true;
   }
   if (msg.type === 'test') {

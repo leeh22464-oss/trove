@@ -2,8 +2,12 @@ import { $, $$, esc, icon, get, post, put, patch, api, toast, openDialog, closeD
 import { state, emit } from './state.js';
 import { current } from './detail.js';
 
-const field = (id, label, value, { type = 'text', hint = '', ph = '' } = {}) =>
-  `<div class="field"><label for="${id}">${label}</label><input id="${id}" type="${type}" value="${esc(value)}" placeholder="${esc(ph)}" autocomplete="off">${hint ? `<span class="hint">${hint}</span>` : ''}</div>`;
+const field = (id, label, value, { type = 'text', hint = '', ph = '', pwd = false } = {}) => {
+  const input = pwd
+    ? `<div class="pwd-wrap"><input id="${id}" type="password" value="${esc(value)}" placeholder="${esc(ph)}" autocomplete="new-password"><button class="eye" type="button" data-eye="${id}" aria-label="显示/隐藏">${icon('eye', 'ico-sm')}</button></div>`
+    : `<input id="${id}" type="${type}" value="${esc(value)}" placeholder="${esc(ph)}" autocomplete="off">`;
+  return `<div class="field"><label for="${id}">${label}</label>${input}${hint ? `<span class="hint">${hint}</span>` : ''}</div>`;
+};
 const check = (id, label, on) => `<div class="field check"><input id="${id}" type="checkbox" ${on === '1' ? 'checked' : ''}><label for="${id}">${label}</label></div>`;
 
 export async function openSettings() {
@@ -13,33 +17,44 @@ export async function openSettings() {
   openDialog({
     title: '设置', wide: true,
     body: `
-    <div class="sec-title">AI（OpenAI 兼容接口）</div>
-    ${field('s_llm_base_url', 'Base URL', s.llm_base_url, { ph: 'https://api.deepseek.com' })}
-    ${field('s_llm_model', '模型', s.llm_model, { ph: 'deepseek-chat' })}
-    ${field('s_llm_api_key', 'API Key', s.llm_api_key, { type: 'password', hint: secretHint('llm_api_key') + ' 建议改用环境变量 CATCH_LLM_API_KEY，不写进数据库。' })}
-    <div class="field"><label for="s_llm_custom_prompt">附加指令（可选）</label><textarea id="s_llm_custom_prompt" placeholder="例如：标签尽量用中文；把英文 prompt 保留原文">${esc(s.llm_custom_prompt)}</textarea></div>
-    <div style="display:flex;gap:12px;align-items:center"><button class="btn" type="button" id="testLlm">测试连接</button><span id="llmRes" class="status-line"></span></div>
+    <div class="sec-card">
+      <div class="sec-h">${icon('sparkles', 'ico-sm')}AI（OpenAI 兼容接口）</div>
+      ${field('s_llm_base_url', 'Base URL', s.llm_base_url, { ph: 'https://api.deepseek.com' })}
+      ${field('s_llm_model', '模型', s.llm_model, { ph: 'deepseek-chat' })}
+      ${field('s_llm_api_key', 'API Key', s.llm_api_key, { pwd: true, hint: secretHint('llm_api_key') + ' 建议改用环境变量 CATCH_LLM_API_KEY，不写进数据库。' })}
+      <div class="field"><label for="s_llm_custom_prompt">附加指令（可选）</label><textarea id="s_llm_custom_prompt" placeholder="例如：标签尽量用中文；把英文 prompt 保留原文">${esc(s.llm_custom_prompt)}</textarea></div>
+      <div class="row-end"><button class="btn sm" type="button" id="testLlm">${icon('refresh-cw', 'ico-sm')}测试连接</button><span id="llmRes" class="status-line"></span></div>
+    </div>
 
-    <div class="sec-title">图片文字识别（OCR）</div>
-    ${field('s_ocr_chain', '识别链路', s.ocr_chain, { hint: '按顺序尝试，前一个失败自动用下一个。可选 paddle-hosted、paddle-selfhost、vision-llm。' })}
-    ${field('s_paddle_token', 'PaddleOCR 托管 token', s.paddle_token, { type: 'password', hint: secretHint('paddle_token') + ' 图片会上传到百度 AI Studio，有每日免费额度。建议用环境变量 CATCH_PADDLE_TOKEN。' })}
-    ${field('s_paddle_selfhost_url', '自建 PaddleOCR 地址', s.paddle_selfhost_url, { hint: '图片不出本机。用 paddlex --serve 启动。' })}
-    <div style="display:flex;gap:12px;align-items:center"><button class="btn" type="button" id="testOcr">检查配置</button><span id="ocrRes" class="status-line"></span></div>
+    <div class="sec-card">
+      <div class="sec-h">${icon('scan-text', 'ico-sm')}图片文字识别（OCR）</div>
+      ${field('s_ocr_chain', '识别链路', s.ocr_chain, { hint: '按顺序尝试，前一个失败自动用下一个。可选 paddle-hosted、paddle-selfhost、vision-llm。' })}
+      ${field('s_paddle_token', 'PaddleOCR 托管 token', s.paddle_token, { pwd: true, hint: secretHint('paddle_token') + ' 图片会上传到百度 AI Studio，有每日免费额度。建议用环境变量 CATCH_PADDLE_TOKEN。' })}
+      ${field('s_paddle_selfhost_url', '自建 PaddleOCR 地址', s.paddle_selfhost_url, { hint: '图片不出本机。用 paddlex --serve 启动。' })}
+      <div class="row-end"><button class="btn sm" type="button" id="testOcr">${icon('refresh-cw', 'ico-sm')}检查配置</button><span id="ocrRes" class="status-line"></span></div>
+    </div>
 
-    <div class="sec-title">自动处理</div>
-    ${check('s_auto_clean', '抓取后自动清洗冗余', s.auto_clean)}
-    ${check('s_auto_classify', '抓取后自动生成建议标签（不会直接打标签，需经「分类方案」确认）', s.auto_classify)}
-    ${check('s_auto_ocr', '图片自动识别文字', s.auto_ocr)}
+    <div class="sec-card">
+      <div class="sec-h">${icon('wand-sparkles', 'ico-sm')}自动处理</div>
+      ${check('s_auto_clean', '抓取后自动清洗冗余', s.auto_clean)}
+      ${check('s_auto_classify', '抓取后自动生成建议标签（不会直接打标签，需经「分类方案」确认）', s.auto_classify)}
+      ${check('s_auto_ocr', '图片自动识别文字', s.auto_ocr)}
+    </div>
 
-    <div class="sec-title">Obsidian</div>
-    ${field('s_obsidian_vault', 'Vault 目录', s.obsidian_vault, { ph: 'D:\\notes\\vault', hint: '导出时直接写入此目录；留空则下载 zip。' })}
+    <div class="sec-card">
+      <div class="sec-h">${icon('book-open', 'ico-sm')}Obsidian</div>
+      ${field('s_obsidian_vault', 'Vault 目录', s.obsidian_vault, { ph: 'D:\\notes\\vault', hint: '导出时直接写入此目录；留空则下载 zip。' })}
+    </div>
 
-    <div class="sec-title">抓取令牌</div>
-    <div class="field"><span class="lbl">用于浏览器扩展或脚本跨源调用，放在 Authorization: Bearer 后面</span>
-      <div style="display:flex;gap:8px"><input type="password" id="s_capture_token" value="${esc(s.capture_token)}" readonly style="flex:1;min-height:36px;padding:0 12px;border:1px solid var(--c-line-strong);border-radius:8px;background:var(--c-bg)">
-      <button class="btn" type="button" id="cpTok">复制</button><button class="btn danger" type="button" id="rstTok">重置</button></div></div>`,
+    <div class="sec-card">
+      <div class="sec-h">${icon('link', 'ico-sm')}抓取令牌</div>
+      <div class="sub-note">用于浏览器扩展或脚本跨源调用，放在 Authorization: Bearer 后面</div>
+      <div class="field"><div class="pwd-wrap"><input type="password" id="s_capture_token" value="${esc(s.capture_token)}" readonly><button class="eye" type="button" data-eye="s_capture_token" aria-label="显示/隐藏">${icon('eye', 'ico-sm')}</button></div></div>
+      <div class="row-end"><button class="btn sm" type="button" id="cpTok">${icon('copy', 'ico-sm')}复制</button><button class="btn sm ghost" type="button" id="rstTok">${icon('refresh-cw', 'ico-sm')}重置</button></div>
+    </div>`,
     foot: `<button class="btn" type="button" data-close>取消</button><button class="btn primary" type="button" id="saveSet">保存</button>`,
     onMount: (d) => {
+      $$('[data-eye]', d).forEach((b) => { b.onclick = () => { const inp = $('#' + b.dataset.eye, d); const show = inp.type === 'password'; inp.type = show ? 'text' : 'password'; b.innerHTML = icon(show ? 'eye-off' : 'eye', 'ico-sm'); }; });
       const collect = () => Object.fromEntries(['llm_base_url', 'llm_model', 'llm_api_key', 'llm_custom_prompt', 'ocr_chain', 'paddle_token', 'paddle_selfhost_url', 'obsidian_vault']
         .map((k) => [k, $('#s_' + k, d).value])
         .concat(['auto_clean', 'auto_classify', 'auto_ocr'].map((k) => [k, $('#s_' + k, d).checked ? '1' : '0'])));
@@ -76,24 +91,38 @@ export function openIo() {
   openDialog({
     title: '导入 / 导出', wide: true,
     body: `
-    <div class="sec-title">导出</div>
-    <p style="display:flex;flex-wrap:wrap;gap:8px">
-      <a class="btn" href="/api/export/json">${icon('download')}完整备份（JSON）</a>
-      <a class="btn" href="/api/export/prompts.md">${icon('download')}所有 prompt（Markdown）</a>
-      <a class="btn" href="/api/export/obsidian?zip=1">${icon('download')}Obsidian 笔记（zip）</a></p>
-    <div class="sec-title">从聊天记录导入</div>
-    <p style="color:var(--c-text-2);margin-bottom:8px">支持 ChatGPT 导出的 conversations.json、Claude 导出的 JSON，或直接粘贴的对话文本。系统会挑出像 prompt 的用户消息，由你勾选后入库。</p>
-    <div class="field"><label for="chatFile">选择文件</label><input id="chatFile" type="file" accept=".json,.txt,.md"></div>
-    <div class="field"><label for="chatText">或粘贴对话文本</label><textarea id="chatText" rows="5" placeholder="user: ……&#10;assistant: ……"></textarea></div>
-    <button class="btn" type="button" id="chatParse">解析</button>
-    <div id="chatRes" style="margin-top:16px"></div>
-    <div class="sec-title">从 Obsidian vault 导入</div>
-    ${field('obsDir', 'Vault 目录路径', state.settings.obsidian_vault || '', { ph: 'D:\\notes\\vault' })}
-    <button class="btn" type="button" id="obsGo">导入</button> <span id="obsRes" class="status-line"></span>
-    <div class="sec-title">从备份恢复</div>
-    <div class="field"><label for="jsonFile">选择 catch 导出的 JSON</label><input id="jsonFile" type="file" accept=".json"></div>
-    <button class="btn" type="button" id="jsonGo">恢复</button> <span id="jsonRes" class="status-line"></span>`,
+    <div class="sec-card">
+      <div class="sec-h">${icon('download', 'ico-sm')}导出</div>
+      <div class="io-btns">
+        <a class="btn" href="/api/export/json">${icon('download')}完整备份（JSON）</a>
+        <a class="btn" href="/api/export/prompts.md">${icon('download')}所有 prompt（Markdown）</a>
+        <a class="btn" href="/api/export/obsidian?zip=1">${icon('download')}Obsidian 笔记（zip）</a>
+      </div>
+    </div>
+
+    <div class="sec-card">
+      <div class="sec-h">${icon('message-square', 'ico-sm')}从聊天记录导入</div>
+      <div class="sub-note">支持 ChatGPT 导出的 conversations.json、Claude 导出的 JSON，或直接粘贴的对话文本。系统会挑出像 prompt 的用户消息，由你勾选后入库。</div>
+      <div class="field"><span class="lbl">选择文件</span><label class="filepick"><input id="chatFile" type="file" accept=".json,.txt,.md" hidden><span class="btn sm">${icon('paperclip', 'ico-sm')}选择文件</span><span class="fp-name" id="chatFileName">未选择文件</span></label></div>
+      <div class="field"><label for="chatText">或粘贴对话文本</label><textarea id="chatText" rows="5" placeholder="user: ……&#10;assistant: ……"></textarea></div>
+      <div class="row-end"><button class="btn" type="button" id="chatParse">${icon('wand-sparkles', 'ico-sm')}解析</button></div>
+      <div id="chatRes" style="margin-top:16px"></div>
+    </div>
+
+    <div class="sec-card">
+      <div class="sec-h">${icon('book-open', 'ico-sm')}从 Obsidian vault 导入</div>
+      ${field('obsDir', 'Vault 目录路径', state.settings.obsidian_vault || '', { ph: 'D:\\notes\\vault' })}
+      <div class="row-end"><button class="btn" type="button" id="obsGo">${icon('upload', 'ico-sm')}导入</button><span id="obsRes" class="status-line"></span></div>
+    </div>
+
+    <div class="sec-card">
+      <div class="sec-h">${icon('undo-2', 'ico-sm')}从备份恢复</div>
+      <div class="field"><span class="lbl">选择 catch 导出的 JSON</span><label class="filepick"><input id="jsonFile" type="file" accept=".json" hidden><span class="btn sm">${icon('paperclip', 'ico-sm')}选择文件</span><span class="fp-name" id="jsonFileName">未选择文件</span></label></div>
+      <div class="row-end"><button class="btn" type="button" id="jsonGo">${icon('upload', 'ico-sm')}恢复</button><span id="jsonRes" class="status-line"></span></div>
+    </div>`,
     onMount: (d) => {
+      const bindFile = (id, nameId) => { const f = $('#' + id, d); f.onchange = () => { $('#' + nameId, d).textContent = f.files[0]?.name || '未选择文件'; }; };
+      bindFile('chatFile', 'chatFileName'); bindFile('jsonFile', 'jsonFileName');
       let cands = [];
       $('#chatParse', d).onclick = async () => {
         const file = $('#chatFile', d).files[0];
@@ -106,9 +135,9 @@ export function openIo() {
           const r = await post('/api/import/chat', { format: 'auto', data: payload });
           cands = r.candidates;
           $('#chatRes', d).innerHTML = cands.length
-            ? `<p>${r.sessions} 段对话，挑出 ${cands.length} 条候选。勾选要入库的：</p>
-               <div style="max-height:260px;overflow:auto;border:1px solid var(--c-line);border-radius:8px">${cands.map((c, i) => `<label style="display:flex;gap:12px;padding:8px 12px;border-bottom:1px solid var(--c-line)"><input type="checkbox" data-c="${i}" checked><span><strong>${esc(c.title || '(无标题)')}</strong><br><span style="color:var(--c-text-2);font-size:12px">${esc(String(c.text).slice(0, 120))}</span></span></label>`).join('')}</div>
-               <button class="btn primary" type="button" id="chatCommit" style="margin-top:12px">导入选中项</button>`
+            ? `<p class="sub-note">${r.sessions} 段对话，挑出 ${cands.length} 条候选。勾选要入库的：</p>
+               <div class="cand-list">${cands.map((c, i) => `<label><input type="checkbox" data-c="${i}" checked><span><span class="ct">${esc(c.title || '(无标题)')}</span><span class="cp">${esc(String(c.text).slice(0, 120))}</span></span></label>`).join('')}</div>
+               <div class="row-end"><button class="btn primary" type="button" id="chatCommit">导入选中项</button></div>`
             : `<p>解析了 ${r.sessions} 段对话，没有挑出像 prompt 的用户消息。</p>`;
           const commit = $('#chatCommit', d);
           if (commit) commit.onclick = async () => {

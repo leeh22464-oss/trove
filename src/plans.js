@@ -73,10 +73,12 @@ export class PlanService {
           const related = this.tags.suggestRelevant(item.content || '', topk);
           const seen = new Set(related.map(t => t.id));
           for (const t of this.tags.frequent(40)) if (!seen.has(t.id)) { related.push(t); seen.add(t.id); }
+          const collections = this.db.prepare('SELECT id,name,parent_id FROM collections').all();
           const { parsed } = await this.llm.extract(item.content || '', {
             relatedTags: related,
             maxTags: parseInt(settings.get('ai_tags_per_item')) || 5,
             customPrompt: settings.get('llm_custom_prompt'),
+            collections,
           });
           suggested = parsed?.tags || [];
           collection = parsed?.collection_hint || null;
@@ -87,11 +89,65 @@ export class PlanService {
       const props = JSON.parse(item.props_json || '{}');
       collection = collection || props.collection_hint || null;
       base.add_tags = this.cleanTags(suggested);
-      base.collection = collection ? String(collection).trim().slice(0, 60) || null : null;
+      base.collection = collection ? String(collection).trim().slice(0, 80) || null : null;
     } catch (e) {
       base.error = String(e.message || e).slice(0, 200);
     }
     return base;
+  }
+
+  // 按 "父/子/孙" 路径逐级 find-or-create 集合，返回叶子 id；undo 记录新建的集合
+  ensureCollectionPath(path, undo) {
+    const parts = String(path || '').split('/').map((s) => s.trim()).filter(Boolean).slice(0, 4);
+    if (!parts.length) return null;
+    let parentId = null;
+    for (const name of parts) {
+      // 每一级：先在同级里找近似匹配（同义/包含），命中就复用，否则才新建
+      let c = this.matchSibling(name, parentId);
+      if (!c) {
+        const r = this.db.prepare('INSERT INTO collections(name,parent_id) VALUES(?,?)').run(name, parentId);
+        c = { id: Number(r.lastInsertRowid) };
+        undo.new_collection_ids.push(c.id);
+      }
+      parentId = c.id;
+    }
+    return parentId;
+  }
+
+  // 同级近似匹配：parentId 下找与新名"指的同一类"的集合；顶级额外走主题别名
+  matchSibling(name, parentId) {
+    const norm = (s) => String(s || '').toLowerCase().replace(/[\s\/·\-_（）()]+/g, '');
+    const n = norm(name);
+    if (!n) return null;
+    const sibs = this.db.prepare('SELECT id,name FROM collections WHERE parent_id IS ?').all(parentId);
+    // 核心词：去掉 AI/智能/库/清单 等修饰，比 "工程实践" 而非 "AI工程化实践"
+    const STOP_HEAD = /^(ai|人工智能|智能|好用|常用|相关)/i;
+    const STOP_TAIL = /(库|清单|列表|集|大全|合集|方法|笔记|经验|资源|实践|技能|技巧|专题)$/i;
+    const core = (s) => norm(s).replace(STOP_HEAD, '').replace(STOP_TAIL, '');
+    const cn = core(name);
+    for (const t of sibs) {
+      const tn = norm(t.name), tc = core(t.name);
+      if (!tn) continue;
+      if (tn === n || tn.includes(n) || n.includes(tn)) return t;
+      if (cn && tc && (tc === cn || tc.includes(cn) || cn.includes(tc))) return t;
+    }
+    // 仅顶级：主题别名映射（面试技巧→求职、前端开发→工具）
+    if (parentId == null) {
+      const ALIAS = [
+        [/面试|求职|简历|找工作|校招|秋招|offer/i, '求职'],
+        [/提示词|prompt|咒语|大模型|llm|agent|vibe|人工智能|ai/i, 'AI'],
+        [/工具|网站|app|软件|插件|组件库|平台|前端|后端|开发|编程|代码/i, '工具'],
+        [/设计|ui|视觉|情绪板|排版|审美|图标|配色/i, '设计'],
+        [/学习|教程|课程|成长|笔记|方法/i, '学习成长'],
+      ];
+      for (const [re, key] of ALIAS) {
+        if (re.test(n)) {
+          const hit = sibs.find((t) => norm(t.name).includes(norm(key)));
+          if (hit) return hit;
+        }
+      }
+    }
+    return null;
   }
 
   cleanTags(list) {
@@ -158,13 +214,9 @@ export class PlanService {
         undo.items.push({ item_id: it.item_id, tags: prevTags, collections: prevCols });
         for (const name of it.add_tags) this.tags.tagItem(it.item_id, tagIdOf(name), { source: 'ai', confidence: 0.7 });
         if (it.collection) {
-          let c = db.prepare('SELECT id FROM collections WHERE name=?').get(it.collection);
-          if (!c) {
-            const r = db.prepare('INSERT INTO collections(name) VALUES(?)').run(it.collection);
-            c = { id: Number(r.lastInsertRowid) };
-            undo.new_collection_ids.push(c.id);
-          }
-          db.prepare('INSERT INTO collection_items(collection_id,item_id) VALUES(?,?) ON CONFLICT DO NOTHING').run(c.id, it.item_id);
+          // collection 可能是层级路径 "父/子/孙"，逐级 find-or-create，挂到叶子
+          const leaf = this.ensureCollectionPath(it.collection, undo);
+          if (leaf) db.prepare('INSERT INTO collection_items(collection_id,item_id) VALUES(?,?) ON CONFLICT DO NOTHING').run(leaf, it.item_id);
         }
         if (failAfter !== null && undo.items.length > failAfter) throw new Error('injected failure');
       }
