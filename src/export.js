@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
+import { ASSETS_DIR } from './config.js';
 
 const ILLEGAL = /[\\/:*?"<>|]/g;
 
@@ -16,7 +17,7 @@ function yamlEscape(v) {
 }
 
 // 条目 → Obsidian 风格 .md
-export function itemToMarkdown(item, tags, props) {
+export function itemToMarkdown(item, tags, props, assets = [], links = []) {
   const lines = ['---'];
   lines.push(`id: ${item.id}`);
   lines.push(`kind: ${item.kind}`);
@@ -28,6 +29,25 @@ export function itemToMarkdown(item, tags, props) {
     lines.push(`${k}: ${yamlEscape(v)}`);
   }
   lines.push('---', '', item.content || '', '');
+  // 双向链接：items 表里的 [[link]] 转成 markdown 链接
+  const linkMap = new Map(links.map(l => [l.dst_id, l.title]));
+  if (linkMap.size) {
+    lines.push('## 相关条目');
+    for (const [id, title] of linkMap) {
+      lines.push(`- [[${title}]]`);
+    }
+    lines.push('');
+  }
+  // 图片资产：assets 表里的图片转成 markdown 图片语法
+  const assetFiles = assets.filter(a => a.kind === 'gallery' && a.path);
+  if (assetFiles.length) {
+    lines.push('## 图片');
+    for (const a of assetFiles) {
+      const fname = path.basename(a.path || a.sha256);
+      lines.push(`![[assets/${fname}]]`);
+    }
+    lines.push('');
+  }
   return lines.join('\n');
 }
 
@@ -108,7 +128,9 @@ export function exportToObsidian(store, { onlyCurated = false, outDir = null } =
   for (const it of items) {
     const tags = db.prepare('SELECT t.name FROM item_tags it JOIN tags t ON t.id=it.tag_id WHERE it.item_id=?').all(it.id).map(r => r.name);
     const props = JSON.parse(it.props_json || '{}');
-    const md = itemToMarkdown(it, tags, props);
+    const galleryAssets = db.prepare('SELECT * FROM assets WHERE item_id=?').all(it.id);
+    const links = db.prepare('SELECT l.dst_id, i.title FROM links l JOIN items i ON i.id=l.dst_id WHERE l.src_id=?').all(it.id);
+    const md = itemToMarkdown(it, tags, props, galleryAssets, links);
     let base = safeFilename(it.title, `item-${it.id}`);
     let fname = `${base}.md`;
     let n = 1;
@@ -117,9 +139,30 @@ export function exportToObsidian(store, { onlyCurated = false, outDir = null } =
     }
     usedNames.set(fname.toLowerCase(), it.id);
     entries.push({ name: fname, data: md });
+    // 图片资产导出到 assets/ 目录
+    for (const a of galleryAssets) {
+      const fname = path.basename(a.path || a.sha256);
+      try { entries.push({ name: `assets/${fname}`, data: fs.readFileSync(path.join(ASSETS_DIR, a.path || '')) }); } catch { }
+    }
+  }
+  // 生成 _links.md：条目间链接索引
+  const linkMap = new Map();
+  for (const it of items) {
+    const links = db.prepare('SELECT l.dst_id, i.title FROM links l JOIN items i ON i.id=l.dst_id WHERE l.src_id=?').all(it.id);
+    if (links.length) {
+      linkMap.set(it.title || `item-${it.id}`, links.map(l => l.title));
+    }
+  }
+  if (linkMap.size) {
+    const linkLines = ['# 条目关联', ''];
+    for (const [src, dsts] of linkMap) {
+      linkLines.push(`- **${src}** → ${dsts.map(t => `[[${t}]]`).join(', ')}`);
+    }
+    entries.push({ name: '_links.md', data: linkLines.join('\n') });
   }
   if (outDir) {
     fs.mkdirSync(outDir, { recursive: true });
+    fs.mkdirSync(path.join(outDir, 'assets'), { recursive: true });
     for (const e of entries) fs.writeFileSync(path.join(outDir, e.name), e.data);
   }
   return entries;

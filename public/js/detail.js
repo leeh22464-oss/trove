@@ -195,6 +195,45 @@ function bind() {
   }
   on('#btnSaveEdit', async () => {
     const content = $('#edBody').value, title = $('#edTitle').value.trim();
+    // [[条目名]] 自动补全：输入 [[ 时提示已有条目标题
+    const ed = $('#edBody');
+    let suggestBox = null;
+    const closeSuggest = () => { suggestBox?.remove(); suggestBox = null; };
+    const showSuggest = async (rect, query) => {
+      closeSuggest();
+      const r = await get(`/api/items?limit=50&status=all`);
+      const titles = r.rows.map(x => x.title).filter(t => t && t.toLowerCase().includes(query.toLowerCase())).slice(0, 8);
+      if (!titles.length) return;
+      suggestBox = document.createElement('div');
+      suggestBox.className = 'wikilinks-suggest';
+      suggestBox.style.left = rect.left + 'px';
+      suggestBox.style.top = (rect.bottom + 4) + 'px';
+      suggestBox.innerHTML = titles.map(t => `<button type="button" data-title="${esc(t)}">${esc(t)}</button>`).join('');
+      suggestBox.onclick = (e) => {
+        const b = e.target.closest('[data-title]');
+        if (!b) return;
+        const before = ed.value.slice(0, ed.selectionStart);
+        const after = ed.value.slice(ed.selectionStart);
+        const link = `[[${b.dataset.title}]]`;
+        ed.value = before + link + after;
+        ed.selectionStart = ed.selectionEnd = before.length + link.length;
+        ed.dispatchEvent(new Event('input'));
+        closeSuggest();
+      };
+      document.body.append(suggestBox);
+    };
+    ed.addEventListener('input', async () => {
+      const before = ed.value.slice(0, ed.selectionStart);
+      const m = before.match(/\[\[([^\[\]]*)$/);
+      if (m) {
+        const r = ed.getBoundingClientRect();
+        const sel = ed.selectionStart;
+        const line = ed.value.slice(0, sel).split('\n').length;
+        const lh = parseInt(getComputedStyle(ed).lineHeight) || 22;
+        showSuggest({ left: r.left + 12, bottom: r.top + 8 + line * lh, width: r.width }, m[1]);
+      } else closeSuggest();
+    });
+    ed.addEventListener('blur', closeSuggest);
     await patch(`/api/items/${it.id}`, title && title !== it.title ? { content, title } : { content });
     editing = false; draft = '';
     toast('已保存，旧版本在「版本历史」里'); emit('refresh'); await showItem(it.id);

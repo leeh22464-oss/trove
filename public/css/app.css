@@ -109,6 +109,9 @@ h1, h2, h3, p { margin: 0; }
 .nav-badge { min-width: 20px; padding: 0 7px; border-radius: var(--r-pill); background: var(--c-accent); color: var(--c-on-accent); font-size: 11px; font-weight: 700; text-align: center; line-height: 20px; }
 
 /* ---------- 扩展选区合并 ---------- */
+.wikilinks-suggest { position: fixed; z-index: 100; min-width: 200px; max-width: 300px; max-height: 240px; overflow: auto; background: var(--c-surface); border: .5px solid var(--c-line); border-radius: var(--r-m); box-shadow: var(--z2); padding: 4px; }
+.wikilinks-suggest button { display: block; width: 100%; padding: 6px 10px; border: 0; background: transparent; text-align: left; font-size: 13px; border-radius: 6px; cursor: pointer; }
+.wikilinks-suggest button:hover { background: var(--c-fill); }
 .clip-merge-list { display:flex; flex-direction:column; gap:var(--s-2); max-height:220px; overflow:auto; margin-bottom:var(--s-4); }
 .clip-merge-row { display:flex; gap:var(--s-2); align-items:flex-start; padding:10px var(--s-3); border:.5px solid var(--c-line); border-radius:var(--r-m); background:var(--c-raised); cursor:pointer; }
 .clip-merge-row input { margin-top:2px; accent-color:var(--c-accent); }
